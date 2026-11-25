@@ -11,7 +11,7 @@ En desarrollo.
 
 - [x] Modelos de activos, portafolios, precios y posiciones.
 - [x] ETL para cargar `datos.xlsx` en la base de datos.
-- [ ] Cálculo de las cantidades iniciales.
+- [x] Cálculo de las cantidades iniciales.
 - [ ] API REST con los weights y el valor total entre dos fechas.
 - [ ] Vista con los gráficos de evolución.
 
@@ -136,6 +136,24 @@ después de cada carga.
 La fecha de los weights se guarda como fecha de inicio del portafolio. Por eso
 un portafolio puede tener fecha de inicio sin valor inicial, pero no al revés.
 
+### Cálculo de las cantidades iniciales
+
+El cálculo está en `portafolios/services.py`, siguiendo la convención del
+Django-Styleguide de ubicar la lógica de negocio en servicios.
+
+- **Las posiciones y su precio inicial se obtienen con el ORM en una sola
+  consulta**, anotando P<sub>i,0</sub> con un `Subquery` sobre `Precio` en la
+  fecha de inicio del portafolio.
+- **La división se hace en Python con `Decimal`.** SQLite opera los decimales
+  como números de punto flotante, por lo que calcular la cantidad en SQL
+  perdería precisión. Las cantidades se guardan con 10 decimales.
+- **V<sub>0</sub> se guarda en el portafolio** junto con las cantidades, para
+  que el resultado quede asociado al valor inicial con que se calculó.
+- **El cálculo es un paso separado de la carga**, igual que en el enunciado,
+  y recibe V<sub>0</sub> como parámetro en lugar de fijarlo en el código.
+- **Si falta algún dato** (fecha de inicio, posiciones o precio inicial de un
+  activo), no se guarda ninguna cantidad de ningún portafolio.
+
 ## Criterios de finalización
 
 - La importación y los cálculos cuentan con pruebas automatizadas.
@@ -150,8 +168,8 @@ un portafolio puede tener fecha de inicio sin valor inicial, pero no al revés.
 ### Requisitos previos
 
 - Git.
-- Python compatible con la versión de Django indicada en requirements.txt.
-- Los siguientes comandos de activación corresponden a Windows CMD.
+- Python 3.12 o superior (requerido por Django 6.1). El CI usa Python 3.15.
+- Los comandos de este README están escritos para Windows (CMD y PowerShell).
 
 ### Clonar el repositorio
 
@@ -166,6 +184,22 @@ cd etl-portafolios
 python -m venv .venv
 .venv\Scripts\activate.bat
 ```
+
+En PowerShell, la activación es:
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+Si PowerShell bloquea el script por la política de ejecución, se puede
+habilitar solo para la sesión actual:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
+```
+
+Con el entorno activado, el prompt muestra `(.venv)` al inicio. Todos los
+comandos `python` de este README asumen que el entorno está activado.
 
 ### Instalar las dependencias
 
@@ -197,6 +231,53 @@ python manage.py cargar_datos --archivo ruta\al\archivo.xlsx
 
 Si el archivo no es válido, el comando lista todos los errores encontrados y no
 modifica la base de datos.
+
+### Calcular las cantidades iniciales
+
+```bat
+python manage.py calcular_cantidades
+```
+
+Calcula C<sub>i,0</sub> = w<sub>i,0</sub> · V<sub>0</sub> / P<sub>i,0</sub>
+para cada activo de cada portafolio, con V<sub>0</sub> = 1.000.000.000 por
+defecto, y muestra el resultado. Para usar otro valor inicial:
+
+```bat
+python manage.py calcular_cantidades --valor-inicial 500000000
+```
+
+Debe ejecutarse después de cada `cargar_datos`, porque la carga deja vacías las
+cantidades calculadas.
+
+## Resultados
+
+### Cantidades iniciales
+
+Con V<sub>0</sub> = 1.000.000.000 al 15/02/2022 para ambos portafolios. Los
+valores se muestran redondeados a 4 decimales; la base de datos guarda 10.
+
+| Activo | P<sub>i,0</sub> | w<sub>i,0</sub> P1 | C<sub>i,0</sub> portafolio 1 | w<sub>i,0</sub> P2 | C<sub>i,0</sub> portafolio 2 |
+|---|---:|---:|---:|---:|---:|
+| ABS | 368,4400 | 1,5 % | 40.712,1919 | 0,0 % | 0,0000 |
+| Asia Desarrollada | 1.212,8100 | 1,6 % | 13.192,5034 | 1,6 % | 13.192,5034 |
+| EEUU | 9.383,5700 | 28,0 % | 29.839,3895 | 28,0 % | 29.839,3895 |
+| EM Asia | 82,3500 | 4,8 % | 582.877,9599 | 4,8 % | 582.877,9599 |
+| EMEA | 290,4490 | 0,5 % | 17.214,7262 | 0,5 % | 17.214,7262 |
+| EMHC | 437,0424 | 4,1 % | 93.812,4081 | 0,0 % | 0,0000 |
+| Europa | 66,0300 | 8,7 % | 1.317.582,9169 | 6,7 % | 1.014.690,2923 |
+| High Yield | 2.355,2500 | 8,6 % | 36.514,1705 | 0,0 % | 0,0000 |
+| IG Corporate | 3.314,6600 | 7,6 % | 22.928,4451 | 11,1 % | 33.487,5975 |
+| Japón | 390,2626 | 3,8 % | 97.370,3447 | 3,8 % | 97.370,3447 |
+| Latam | 26,8400 | 0,5 % | 186.289,1207 | 0,5 % | 186.289,1207 |
+| Latam HY | 1.007,5330 | 2,8 % | 27.790,6530 | 0,0 % | 0,0000 |
+| MBS+CMBS+AMBS | 2.226,5600 | 9,5 % | 42.666,7146 | 14,6 % | 65.572,0034 |
+| MM/Caja | 104,6400 | 5,1 % | 487.385,3211 | 2,8 % | 267.584,0979 |
+| Otros RV | 717,8100 | 1,8 % | 25.076,2737 | 1,8 % | 25.076,2737 |
+| Tesoro | 2.403,8500 | 8,8 % | 36.607,9414 | 21,5 % | 89.439,8569 |
+| UK | 34,4800 | 2,3 % | 667.053,3643 | 2,3 % | 667.053,3643 |
+
+Como comprobación, Σ C<sub>i,0</sub> · P<sub>i,0</sub> reconstruye
+V<sub>0</sub> en ambos portafolios con una diferencia menor a 0,000001.
 
 ### Verificar la configuración
 
@@ -251,9 +332,9 @@ python manage.py check
 python manage.py test
 ```
 
-Actualmente las pruebas cubren las restricciones de los modelos y el ETL,
-incluida una carga completa del archivo real. Se ampliarán junto con los
-cálculos y la API.
+Actualmente las pruebas cubren las restricciones de los modelos, el ETL y
+el cálculo de las cantidades iniciales, incluidas cargas completas del
+archivo real. Se ampliarán junto con la API.
 
 ## Integración continua
 
