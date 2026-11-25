@@ -221,3 +221,16 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Entorno V de la prueba
+.venv/
+
+#Datos locales de la ev
+data/
+
+#Variables del entorno
+.env
+
+#Base de datos de Django
+db.sqlite3
+db.sqlite3-journal
