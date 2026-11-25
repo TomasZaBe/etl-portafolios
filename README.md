@@ -38,3 +38,59 @@ las cantidades iniciales de cada activo.
 - El README explica cómo instalar, ejecutar y probar el proyecto.
 - Los cambios se integran mediante pull requests y pasan las verificaciones
   de integración continua.
+
+## Instalación y ejecución local
+
+### Requisitos previos
+
+- Git.
+- Python compatible con la versión de Django indicada en requirements.txt.
+- Los siguientes comandos de activación corresponden a Windows CMD.
+
+### Clonar el repositorio
+
+```bat
+git clone https://github.com/TomasZaBe/etl-portafolios.git
+cd etl-portafolios
+```
+
+### Crear y activar el entorno virtual
+
+```bat
+python -m venv .venv
+.venv\Scripts\activate.bat
+```
+
+### Instalar las dependencias
+
+```bat
+python -m pip install -r requirements.txt
+```
+
+### Preparar la base de datos local
+
+```bat
+python manage.py migrate
+```
+
+El proyecto utiliza SQLite para el desarrollo local. La base de datos
+db.sqlite3 no se incluye en el repositorio.
+
+### Verificar la configuración
+
+```bat
+python manage.py check
+```
+
+### Iniciar el servidor de desarrollo
+
+```bat
+python manage.py runserver
+```
+
+Abrir http://127.0.0.1:8000/ en el navegador.
+
+Para detener el servidor, pulsar Ctrl + C en la terminal.
+
+Actualmente se muestra la página de bienvenida de Django.
+La API y la vista de portafolios todavía no están implementadas.
