@@ -30,6 +30,65 @@ las cantidades iniciales de cada activo.
 - Crear una vista que consuma la API y muestre los pesos mediante un gráfico
   de áreas apiladas y el valor total mediante un gráfico de línea.
 
+## Decisiones de diseño
+
+### Modelo de datos
+
+El dominio se modela con cuatro modelos:
+
+| Modelo | Representa | Origen |
+|---|---|---|
+| `Activo` | Cada uno de los 17 activos invertibles | Hojas `weights` y `Precios` |
+| `Portafolio` | Portafolio, su valor inicial V₀ y su fecha de inicio t = 0 | Hoja `weights` y cálculo inicial |
+| `Precio` | Precio p<sub>i,t</sub> de un activo en una fecha | Hoja `Precios` |
+| `Posicion` | Activo dentro de un portafolio, con su weight inicial w<sub>i,0</sub> y su cantidad c<sub>i,0</sub> | Hoja `weights` y cálculo inicial |
+
+Cada dato se guarda según aquello de lo que depende:
+
+- **El precio es un modelo propio** porque depende del activo y de la fecha
+  (17 activos × 367 fechas). Guardarlo como campo de `Activo` obligaría a usar
+  una columna por fecha o un JSON, y ninguna de las dos alternativas permite
+  calcular los montos con el ORM.
+- **El weight inicial y la cantidad son campos de `Posicion`** porque dependen
+  del par portafolio-activo y no de la fecha. El enunciado establece que las
+  cantidades se mantienen constantes (c<sub>i,t</sub> = c<sub>i,0</sub>), por lo
+  que basta con un registro por activo y portafolio. Guardarlos juntos asegura
+  que cada cantidad corresponda siempre a su weight inicial.
+- `Posicion` es el modelo intermedio de la relación muchos a muchos entre
+  `Portafolio` y `Activo`.
+
+### Valores calculados que no se almacenan
+
+Los montos x<sub>i,t</sub> = p<sub>i,t</sub> · c<sub>i,0</sub>, el valor total
+V<sub>t</sub> = Σ x<sub>i,t</sub> y los weights w<sub>i,t</sub> = x<sub>i,t</sub> / V<sub>t</sub>
+se derivan de los precios. Por eso se calculan con el ORM al consultar la API y
+no se guardan en la base de datos. De esta forma no pueden quedar desalineados
+con los precios cargados y no se duplica información.
+
+### Alternativa descartada
+
+Se evaluó modelar `Weight` y `Cantidad` como tablas separadas con fecha
+(portafolio, activo, fecha, valor). Esa estructura permitiría registrar
+rebalanceos, pero:
+
+- Agrega una generalidad que el enunciado no necesita, porque las cantidades
+  no cambian.
+- Complica la consulta de la API, que tendría que buscar la cantidad vigente en
+  cada fecha.
+- No garantiza que cada cantidad tenga su weight correspondiente.
+
+Si en el futuro se necesitaran rebalanceos, la cantidad pasaría a una tabla
+con fecha de vigencia.
+
+### Tipos numéricos
+
+Se usa `DecimalField` en lugar de `float` para no acumular errores de
+redondeo:
+
+- Precios con 6 decimales (el archivo trae hasta 5).
+- Weights con 6 decimales.
+- Cantidades con 10 decimales.
+
 ## Criterios de finalización
 
 - La importación y los cálculos cuentan con pruebas automatizadas.
@@ -129,8 +188,8 @@ python manage.py check
 python manage.py test
 ```
 
-Actualmente no hay pruebas propias de la aplicación. Se incorporarán
-junto con los modelos, la importación de datos y los cálculos.
+Actualmente las pruebas cubren las restricciones de los modelos. Se
+ampliarán junto con la importación de datos y los cálculos.
 
 ## Integración continua
 
@@ -146,5 +205,4 @@ Verifica:
 - Ausencia de cambios en modelos sin su correspondiente migración.
 - Ejecución de pruebas automatizadas.
 
-Actualmente no hay pruebas propias de la aplicación. El workflow
-ejecutará las pruebas que se incorporen durante el desarrollo.
+El workflow ejecuta todas las pruebas de la aplicación.
