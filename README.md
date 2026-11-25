@@ -131,3 +131,20 @@ python manage.py test
 
 Actualmente no hay pruebas propias de la aplicación. Se incorporarán
 junto con los modelos, la importación de datos y los cálculos.
+
+## Integración continua
+
+El workflow de GitHub Actions se ejecuta en pull requests hacia main
+y cuando se publican cambios en main.
+
+Utiliza Python 3.15 y las dependencias fijadas en requirements.txt.
+
+Verifica:
+- Compatibilidad de las dependencias instaladas.
+- Revisión de código y formato mediante Ruff.
+- Configuración de Django.
+- Ausencia de cambios en modelos sin su correspondiente migración.
+- Ejecución de pruebas automatizadas.
+
+Actualmente no hay pruebas propias de la aplicación. El workflow
+ejecutará las pruebas que se incorporen durante el desarrollo.
