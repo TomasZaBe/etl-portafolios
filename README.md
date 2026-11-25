@@ -94,3 +94,40 @@ Para detener el servidor, pulsar Ctrl + C en la terminal.
 
 Actualmente se muestra la página de bienvenida de Django.
 La API y la vista de portafolios todavía no están implementadas.
+
+## Verificaciones de desarrollo
+
+Con el entorno virtual activo, ejecutar:
+
+### Revisión de código
+
+```bat
+python -m ruff check .
+```
+
+### Comprobación del formato
+
+```bat
+python -m ruff format --check .
+```
+
+Para aplicar el formato automáticamente:
+
+```bat
+python -m ruff format .
+```
+
+### Comprobación de Django
+
+```bat
+python manage.py check
+```
+
+### Pruebas automatizadas
+
+```bat
+python manage.py test
+```
+
+Actualmente no hay pruebas propias de la aplicación. Se incorporarán
+junto con los modelos, la importación de datos y los cálculos.
