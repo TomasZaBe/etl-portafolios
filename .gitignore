@@ -225,8 +225,10 @@ __marimo__/
 # Entorno V de la prueba
 .venv/
 
-#Datos locales de la ev
-data/
+# Datos locales de la evaluación. Solo se versiona el archivo de entrada
+# entregado en el enunciado para que el ETL pueda ejecutarse tras clonar.
+data/*
+!data/datos.xlsx
 
 #Variables del entorno
 .env

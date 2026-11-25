@@ -49,6 +49,12 @@ class PortafolioTests(ModelosTestCase):
                 nombre="portafolio 2", valor_inicial=0, fecha_inicio=FECHA_INICIO
             )
 
+    def test_acepta_fecha_inicio_sin_valor_inicial(self):
+        portafolio = Portafolio.objects.create(
+            nombre="portafolio 2", fecha_inicio=FECHA_INICIO
+        )
+        self.assertIsNone(portafolio.valor_inicial)
+
     def test_valor_inicial_requiere_fecha_inicio(self):
         with self.assertRaises(IntegrityError):
             Portafolio.objects.create(nombre="portafolio 2", valor_inicial=1)

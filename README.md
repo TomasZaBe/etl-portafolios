@@ -7,9 +7,13 @@ modelar portafolios y consultar su evolución mediante una API REST y gráficos.
 
 ## Estado del proyecto
 
-En desarrollo. Actualmente se está preparando el repositorio y la documentación
-inicial. Las funcionalidades descritas a continuación son el alcance previsto,
-no funcionalidades implementadas todavía.
+En desarrollo.
+
+- [x] Modelos de activos, portafolios, precios y posiciones.
+- [x] ETL para cargar `datos.xlsx` en la base de datos.
+- [ ] Cálculo de las cantidades iniciales.
+- [ ] API REST con los weights y el valor total entre dos fechas.
+- [ ] Vista con los gráficos de evolución.
 
 ## Objetivo
 
@@ -89,6 +93,49 @@ redondeo:
 - Weights con 6 decimales.
 - Cantidades con 10 decimales.
 
+### ETL
+
+El ETL está en `portafolios/etl.py` y se ejecuta con el comando
+`cargar_datos`. Tiene tres etapas separadas:
+
+1. **Extraer**: lee las hojas `weights` y `Precios`. Los nombres de hoja se
+   comparan sin distinguir mayúsculas, porque el enunciado dice "Weights" y el
+   archivo usa "weights".
+2. **Transformar y validar**: limpia los datos y reúne todos los errores antes
+   de tocar la base de datos.
+3. **Cargar**: guarda los datos en una única transacción.
+
+Particularidades del archivo que el ETL resuelve:
+
+- **El orden de los activos difiere entre hojas.** En `weights` el tercer
+  activo es UK y en `Precios` es Japón. Los activos se asocian por nombre,
+  nunca por posición.
+- **La hoja `weights` tiene cientos de filas vacías al final.** Se descartan
+  las filas y columnas completamente vacías.
+- **Los weights tienen ruido de punto flotante** (`0.018000000000000002`).
+  Se convierten a `Decimal` y se redondean a 6 decimales, con lo que cada
+  portafolio suma exactamente 1.
+
+Validaciones:
+
+- Existen ambas hojas y tienen la estructura esperada.
+- `weights` tiene una única fecha de inicio, activos sin repetir y weights
+  numéricos entre 0 y 1 que suman 1 en cada portafolio.
+- `Precios` tiene fechas válidas y sin repetir, y precios numéricos mayores
+  que 0.
+- Ambas hojas tienen los mismos activos.
+- Existen precios para la fecha de inicio, necesarios para calcular las
+  cantidades iniciales.
+
+La carga es idempotente: inserta o actualiza los registros, por lo que
+ejecutarla varias veces deja la base de datos en el mismo estado. Al recargar
+se vacían las cantidades y el valor inicial de los portafolios, porque sus
+weights o precios iniciales pueden haber cambiado; deben calcularse de nuevo
+después de cada carga.
+
+La fecha de los weights se guarda como fecha de inicio del portafolio. Por eso
+un portafolio puede tener fecha de inicio sin valor inicial, pero no al revés.
+
 ## Criterios de finalización
 
 - La importación y los cálculos cuentan con pruebas automatizadas.
@@ -134,6 +181,22 @@ python manage.py migrate
 
 El proyecto utiliza SQLite para el desarrollo local. La base de datos
 db.sqlite3 no se incluye en el repositorio.
+
+### Cargar los datos
+
+```bat
+python manage.py cargar_datos
+```
+
+Por defecto lee `data/datos.xlsx`, el archivo entregado en el enunciado, que
+se incluye en el repositorio. Para usar otro archivo:
+
+```bat
+python manage.py cargar_datos --archivo ruta\al\archivo.xlsx
+```
+
+Si el archivo no es válido, el comando lista todos los errores encontrados y no
+modifica la base de datos.
 
 ### Verificar la configuración
 
@@ -188,8 +251,9 @@ python manage.py check
 python manage.py test
 ```
 
-Actualmente las pruebas cubren las restricciones de los modelos. Se
-ampliarán junto con la importación de datos y los cálculos.
+Actualmente las pruebas cubren las restricciones de los modelos y el ETL,
+incluida una carga completa del archivo real. Se ampliarán junto con los
+cálculos y la API.
 
 ## Integración continua
 

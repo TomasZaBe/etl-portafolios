@@ -40,8 +40,9 @@ class Activo(BaseModel):
 class Portafolio(BaseModel):
     """Portafolio de inversión compuesto por una combinación de activos.
 
-    ``valor_inicial`` y ``fecha_inicio`` corresponden a V_0 y t = 0. Quedan
-    vacíos hasta que se calculan las cantidades iniciales.
+    ``fecha_inicio`` es t = 0 y la registra el ETL a partir de la fecha de los
+    weights iniciales. ``valor_inicial`` es V_0 y queda vacío hasta que se
+    calculan las cantidades iniciales, que requieren una fecha de inicio.
     """
 
     nombre = models.CharField(max_length=100, unique=True)
@@ -62,11 +63,9 @@ class Portafolio(BaseModel):
                 name="portafolio_valor_inicial_positivo",
             ),
             models.CheckConstraint(
-                condition=(
-                    models.Q(valor_inicial__isnull=True, fecha_inicio__isnull=True)
-                    | models.Q(valor_inicial__isnull=False, fecha_inicio__isnull=False)
-                ),
-                name="portafolio_valor_y_fecha_inicio_juntos",
+                condition=models.Q(valor_inicial__isnull=True)
+                | models.Q(fecha_inicio__isnull=False),
+                name="portafolio_valor_inicial_requiere_fecha_inicio",
             ),
         ]
 
