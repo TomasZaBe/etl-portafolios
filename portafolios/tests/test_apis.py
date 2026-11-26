@@ -18,9 +18,41 @@ class PortafolioListApiTests(EvolucionTestCase, APITestCase):
                     "nombre": "portafolio 1",
                     "fecha_inicio": "2022-02-15",
                     "valor_inicial": "1000.00",
+                    "evolucion": "http://testserver"
+                    + reverse(
+                        "portafolios:api-evolucion",
+                        kwargs={"portafolio_id": self.portafolio.id},
+                    ),
                 }
             ],
         )
+
+
+class ApiNavegableTests(EvolucionTestCase, APITestCase):
+    def get_html(self, url):
+        return self.client.get(url, HTTP_ACCEPT="text/html")
+
+    def test_muestra_enlaces_a_las_secciones(self):
+        urls = {
+            "lista": reverse("portafolios:api-list"),
+            "evolución": reverse(
+                "portafolios:api-evolucion",
+                kwargs={"portafolio_id": self.portafolio.id},
+            ),
+        }
+        for pagina, url in urls.items():
+            with self.subTest(pagina=pagina):
+                respuesta = self.get_html(url)
+
+                self.assertEqual(respuesta.status_code, 200)
+                for destino in ("portafolios:graficos", "admin:index"):
+                    self.assertContains(respuesta, f'href="{reverse(destino)}"')
+                self.assertContains(respuesta, "API de portafolios")
+
+    def test_titulos_en_espanol(self):
+        respuesta = self.get_html(reverse("portafolios:api-list"))
+
+        self.assertContains(respuesta, "<h1>Portafolios</h1>", html=True)
 
 
 class PortafolioEvolucionApiTests(EvolucionTestCase, APITestCase):

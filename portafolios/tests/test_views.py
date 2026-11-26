@@ -20,6 +20,12 @@ class PortafoliosGraficosViewTests(TestCase):
             self.respuesta, 'data-url-evolucion="/api/portafolios/0/evolucion/"'
         )
 
+    def test_incluye_la_navegacion_entre_secciones(self):
+        for destino in ("portafolios:graficos", "portafolios:api-list", "admin:index"):
+            with self.subTest(destino=destino):
+                self.assertContains(self.respuesta, f'href="{reverse(destino)}"')
+        self.assertContains(self.respuesta, 'aria-current="page"')
+
     def test_incluye_filtros_de_fecha(self):
         self.assertContains(self.respuesta, 'name="fecha_inicio"')
         self.assertContains(self.respuesta, 'name="fecha_fin"')

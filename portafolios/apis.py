@@ -15,24 +15,39 @@ from core.utils import get_object
 from portafolios.models import Portafolio
 from portafolios.selectors import portafolio_evolucion, portafolio_list
 
+# En la API navegable, el atributo ``name`` de cada API es el título de la
+# página y su docstring es la descripción.
+
 
 class PortafolioListApi(APIView):
+    """Portafolios cargados, con el enlace a la evolución de cada uno."""
+
+    name = "Portafolios"
+
     class OutputSerializer(serializers.ModelSerializer):
+        evolucion = serializers.HyperlinkedIdentityField(
+            view_name="portafolios:api-evolucion", lookup_url_kwarg="portafolio_id"
+        )
+
         class Meta:
             model = Portafolio
-            fields = ["id", "nombre", "fecha_inicio", "valor_inicial"]
+            fields = ["id", "nombre", "fecha_inicio", "valor_inicial", "evolucion"]
 
     def get(self, request):
-        data = self.OutputSerializer(portafolio_list(), many=True).data
+        data = self.OutputSerializer(
+            portafolio_list(), many=True, context={"request": request}
+        ).data
         return Response(data)
 
 
 class PortafolioEvolucionApi(APIView):
     """Weights w_i,t y valor total V_t de un portafolio entre dos fechas.
 
-    Parámetros opcionales: ``fecha_inicio`` y ``fecha_fin`` (AAAA-MM-DD). Sin
-    ellos se devuelve todo el rango disponible.
+    Parámetros opcionales: fecha_inicio y fecha_fin (AAAA-MM-DD). Sin ellos se
+    devuelve todo el rango disponible.
     """
+
+    name = "Evolución del portafolio"
 
     class FilterSerializer(serializers.Serializer):
         fecha_inicio = serializers.DateField(required=False)
