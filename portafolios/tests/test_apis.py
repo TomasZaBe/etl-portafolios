@@ -81,7 +81,9 @@ class PortafolioEvolucionApiTests(EvolucionTestCase, APITestCase):
         respuesta = self.get(fecha_inicio="15/02/2022")
 
         self.assertEqual(respuesta.status_code, 400)
-        self.assertIn("fecha_inicio", respuesta.json())
+        datos = respuesta.json()
+        self.assertEqual(datos["message"], "Error de validación")
+        self.assertIn("fecha_inicio", datos["extra"]["fields"])
 
     def test_rechaza_fecha_fin_anterior_a_fecha_inicio(self):
         respuesta = self.get(fecha_inicio="2022-02-17", fecha_fin="2022-02-16")
@@ -89,14 +91,23 @@ class PortafolioEvolucionApiTests(EvolucionTestCase, APITestCase):
         self.assertEqual(respuesta.status_code, 400)
         self.assertEqual(
             respuesta.json(),
-            {"fecha_fin": ["Debe ser igual o posterior a fecha_inicio."]},
+            {
+                "message": "Error de validación",
+                "extra": {
+                    "fields": {
+                        "fecha_fin": ["Debe ser igual o posterior a fecha_inicio."]
+                    }
+                },
+            },
         )
 
     def test_portafolio_inexistente(self):
         respuesta = self.get(portafolio_id=999)
 
         self.assertEqual(respuesta.status_code, 404)
-        self.assertEqual(respuesta.json(), {"detail": "No existe el portafolio 999."})
+        self.assertEqual(
+            respuesta.json(), {"message": "No existe el portafolio 999.", "extra": {}}
+        )
 
     def test_portafolio_sin_cantidades(self):
         Posicion.objects.update(cantidad=None)
@@ -104,14 +115,24 @@ class PortafolioEvolucionApiTests(EvolucionTestCase, APITestCase):
         respuesta = self.get()
 
         self.assertEqual(respuesta.status_code, 409)
-        self.assertIn("cantidades iniciales", respuesta.json()["detail"])
+        self.assertEqual(
+            respuesta.json(),
+            {
+                "message": "El portafolio 'portafolio 1' no tiene sus cantidades "
+                "iniciales calculadas.",
+                "extra": {},
+            },
+        )
 
     def test_solo_permite_get(self):
         url = reverse(
             "portafolios:api-evolucion", kwargs={"portafolio_id": self.portafolio.id}
         )
 
-        self.assertEqual(self.client.post(url).status_code, 405)
+        respuesta = self.client.post(url)
+
+        self.assertEqual(respuesta.status_code, 405)
+        self.assertEqual(set(respuesta.json()), {"message", "extra"})
 
     def test_portafolio_recien_creado_sin_datos(self):
         nuevo = Portafolio.objects.create(nombre="nuevo")

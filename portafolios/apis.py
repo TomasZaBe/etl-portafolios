@@ -2,25 +2,18 @@
 
 Siguen la estructura del Django-Styleguide: cada API valida la entrada con un
 serializer propio, delega la consulta a un selector y da forma a la respuesta
-con un serializer de salida.
+con un serializer de salida. Los errores de negocio (``ApplicationError``) los
+traduce el manejador de excepciones de ``core``.
 """
 
-from rest_framework import serializers, status
-from rest_framework.exceptions import APIException, NotFound
+from rest_framework import serializers
+from rest_framework.exceptions import NotFound
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.utils import get_object
 from portafolios.models import Portafolio
-from portafolios.selectors import (
-    ErrorPortafolioSinCantidades,
-    portafolio_evolucion,
-    portafolio_list,
-)
-
-
-class CantidadesNoCalculadas(APIException):
-    status_code = status.HTTP_409_CONFLICT
-    default_code = "cantidades_no_calculadas"
+from portafolios.selectors import portafolio_evolucion, portafolio_list
 
 
 class PortafolioListApi(APIView):
@@ -77,16 +70,11 @@ class PortafolioEvolucionApi(APIView):
     def get(self, request, portafolio_id):
         filtros = self.FilterSerializer(data=request.query_params)
         filtros.is_valid(raise_exception=True)
-        portafolio = Portafolio.objects.filter(pk=portafolio_id).first()
+        portafolio = get_object(Portafolio, pk=portafolio_id)
         if portafolio is None:
             raise NotFound(f"No existe el portafolio {portafolio_id}.")
 
-        try:
-            valores = portafolio_evolucion(
-                portafolio=portafolio, **filtros.validated_data
-            )
-        except ErrorPortafolioSinCantidades as error:
-            raise CantidadesNoCalculadas(str(error)) from error
+        valores = portafolio_evolucion(portafolio=portafolio, **filtros.validated_data)
 
         data = self.OutputSerializer(
             {

@@ -9,6 +9,7 @@ from django.conf import settings
 from django.core.management import CommandError, call_command
 from django.test import TestCase
 
+from core.exceptions import ApplicationError
 from portafolios.etl import ErrorValidacionETL, ejecutar_etl
 from portafolios.models import Activo, Portafolio, Posicion, Precio
 
@@ -277,6 +278,17 @@ class ValidacionTests(EtlTestCase):
         precios["Dates"] = [FECHA_SIGUIENTE, datetime(2022, 2, 17)]
         ruta = self.escribir_excel({"weights": weights_base(), "Precios": precios})
         self.assertErrorETL(ruta, "No hay precios para la fecha de inicio")
+
+    def test_es_un_application_error_con_los_errores_en_extra(self):
+        ruta = self.escribir_excel({"weights": weights_base()})
+
+        with self.assertRaises(ApplicationError) as contexto:
+            ejecutar_etl(ruta)
+        self.assertEqual(contexto.exception.message, "El archivo no es válido.")
+        self.assertEqual(
+            contexto.exception.extra,
+            {"errores": ["Falta la hoja 'Precios' en el archivo."]},
+        )
 
     def test_informa_todos_los_errores_de_una_hoja(self):
         weights = weights_base()

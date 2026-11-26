@@ -2,9 +2,11 @@ from datetime import date
 from decimal import Decimal
 from io import StringIO
 
+from django.core.exceptions import ValidationError
 from django.core.management import CommandError, call_command
 from django.test import TestCase
 
+from core.exceptions import ApplicationError
 from portafolios.etl import ejecutar_etl
 from portafolios.models import Activo, Portafolio, Posicion, Precio
 from portafolios.services import (
@@ -113,6 +115,45 @@ class PortafolioCantidadesInicialesTests(CantidadesTestCase):
                 portafolio=self.portafolio, valor_inicial=Decimal("0")
             )
 
+    def test_rechaza_valor_inicial_no_finito(self):
+        for valor in ("NaN", "Infinity"):
+            with self.subTest(valor=valor):
+                with self.assertRaisesMessage(ErrorCalculoCantidades, "mayor que 0"):
+                    portafolio_cantidades_iniciales_calcular(
+                        portafolio=self.portafolio, valor_inicial=Decimal(valor)
+                    )
+
+    def test_rechaza_valor_inicial_con_mas_de_2_decimales(self):
+        with self.assertRaises(ValidationError):
+            portafolio_cantidades_iniciales_calcular(
+                portafolio=self.portafolio, valor_inicial=Decimal("1000.555")
+            )
+
+        self.assertIsNone(self.cantidad(self.activo_a))
+
+    def test_rechaza_valor_inicial_con_demasiados_digitos(self):
+        with self.assertRaises(ValidationError):
+            portafolio_cantidades_iniciales_calcular(
+                portafolio=self.portafolio, valor_inicial=Decimal("1E25")
+            )
+
+    def test_rechaza_cantidad_que_excede_la_precision_y_no_guarda_nada(self):
+        # Con un precio inicial muy bajo la cantidad supera los 18 dígitos
+        # enteros que admite el campo.
+        Precio.objects.filter(activo=self.activo_b, fecha=FECHA_INICIO).update(
+            valor=Decimal("0.000001")
+        )
+
+        with self.assertRaisesMessage(ErrorCalculoCantidades, "excede la precisión"):
+            portafolio_cantidades_iniciales_calcular(
+                portafolio=self.portafolio, valor_inicial=Decimal("1E17")
+            )
+
+        self.assertIsNone(self.cantidad(self.activo_a))
+
+    def test_es_un_application_error(self):
+        self.assertTrue(issubclass(ErrorCalculoCantidades, ApplicationError))
+
     def test_requiere_fecha_de_inicio(self):
         portafolio = Portafolio.objects.create(nombre="sin fecha")
 
@@ -208,3 +249,15 @@ class ComandoCalcularCantidadesTests(CantidadesTestCase):
 
         with self.assertRaisesMessage(CommandError, "No hay portafolios"):
             call_command("calcular_cantidades")
+
+    def test_valor_inicial_invalido_da_un_mensaje_claro(self):
+        for valor in ("1000.555", "1E25"):
+            with self.subTest(valor=valor):
+                with self.assertRaisesMessage(CommandError, "Valor inicial inválido"):
+                    call_command("calcular_cantidades", valor_inicial=valor)
+
+    def test_rechaza_valores_no_numericos_o_no_finitos(self):
+        for valor in ("abc", "NaN", "Infinity"):
+            with self.subTest(valor=valor):
+                with self.assertRaises(CommandError):
+                    call_command("calcular_cantidades", f"--valor-inicial={valor}")

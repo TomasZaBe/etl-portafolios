@@ -12,6 +12,8 @@ vista con gráficos.
 - [Inicio rápido](#inicio-rápido)
 - [Resultados](#resultados)
 - [API](#api)
+- [Configuración](#configuración)
+- [Admin](#admin)
 - [Comandos](#comandos)
 - [Estructura del proyecto](#estructura-del-proyecto)
 - [Decisiones de diseño](#decisiones-de-diseño)
@@ -26,9 +28,9 @@ vista con gráficos.
 | 3. Cantidades iniciales C<sub>i,0</sub> con V<sub>0</sub> = 1.000.000.000 | Comando `calcular_cantidades`. | `portafolios/services.py` |
 | 4. API REST con `fecha_inicio` y `fecha_fin` que entrega w<sub>i,t</sub> y V<sub>t</sub> usando el ORM | `GET /api/portafolios/{id}/evolucion/`. Una única consulta del ORM calcula x<sub>i,t</sub>, V<sub>t</sub> y w<sub>i,t</sub>. | `portafolios/selectors.py`, `portafolios/apis.py` |
 | 5. Vista que usa la API: áreas apiladas para w<sub>i,t</sub> y líneas para V<sub>t</sub> | Página principal con Chart.js y filtro de fechas. | `portafolios/templates/`, `portafolios/static/` |
-| Bonus: Django-Styleguide | Lógica de escritura en servicios, consultas en selectores y APIs con serializers de filtros y de salida. | `services.py`, `selectors.py`, `apis.py` |
+| Bonus: Django-Styleguide | Lógica de escritura en servicios, consultas en selectores, APIs con serializers de filtros y de salida, errores con `ApplicationError` y un manejador central, y configuración con variables de entorno. | `services.py`, `selectors.py`, `apis.py`, `core/`, `config/env.py` |
 
-El proyecto incluye 102 pruebas automatizadas y un workflow de integración
+El proyecto incluye 126 pruebas automatizadas y un workflow de integración
 continua que las ejecuta en cada pull request.
 
 ## Inicio rápido
@@ -76,6 +78,10 @@ python manage.py migrate
 
 El proyecto usa SQLite. La base de datos `db.sqlite3` se crea localmente y no
 se incluye en el repositorio.
+
+No hace falta configurar nada más para ejecutarlo en local: las variables de
+entorno tienen valores por defecto para desarrollo (ver
+[Configuración](#configuración)).
 
 **4. Cargar los datos y calcular las cantidades iniciales**
 
@@ -191,13 +197,45 @@ Ejemplo: `GET /api/portafolios/1/evolucion/?fecha_inicio=2023-02-16&fecha_fin=20
 
 El ejemplo muestra solo 3 de los 17 activos.
 
-Respuestas de error:
+### Errores
+
+Todos los errores tienen la forma `{"message": str, "extra": object}`. En los
+errores de validación, `extra.fields` trae el detalle por campo:
+
+```json
+{
+  "message": "Error de validación",
+  "extra": {"fields": {"fecha_fin": ["Debe ser igual o posterior a fecha_inicio."]}}
+}
+```
 
 | Código | Caso |
 |---|---|
 | `400` | Una fecha no tiene el formato `AAAA-MM-DD`, o `fecha_fin` es anterior a `fecha_inicio`. |
 | `404` | No existe el portafolio. |
 | `409` | El portafolio no tiene sus cantidades iniciales calculadas. |
+
+## Configuración
+
+La configuración se lee desde variables de entorno con `django-environ`. Se
+pueden definir en el sistema o en un archivo `.env` en la raíz del proyecto;
+`.env.example` sirve de plantilla. El archivo `.env` no se versiona.
+
+| Variable | Por defecto | Descripción |
+|---|---|---|
+| `DJANGO_SECRET_KEY` | Una clave de desarrollo | Clave secreta de Django. Obligatoria fuera del entorno local. |
+| `DJANGO_DEBUG` | `True` | Modo de depuración. Debe ser `False` en producción. |
+| `DJANGO_ALLOWED_HOSTS` | Vacío | Hosts permitidos, separados por comas. |
+
+Los valores por defecto solo sirven para desarrollo local, para que el
+proyecto se pueda ejecutar recién clonado.
+
+## Admin
+
+El admin de Django (`/admin/`) es de solo lectura: permite revisar los datos
+cargados, pero no agregarlos, modificarlos ni eliminarlos. Los datos se
+modifican únicamente con `cargar_datos` y `calcular_cantidades`. Para entrar se
+necesita un usuario creado con `python manage.py createsuperuser`.
 
 ## Comandos
 
@@ -231,14 +269,23 @@ V<sub>0</sub> = 1.000.000.000.
 
 ```text
 etl-portafolios/
-├── config/                     Configuración del proyecto Django
+├── config/
+│   ├── settings.py             Configuración de Django
+│   └── env.py                  Lectura de variables de entorno
+├── core/                       Código común a todo el proyecto
+│   ├── models.py               BaseModel
+│   ├── exceptions.py           ApplicationError
+│   ├── exception_handlers.py   Formato de los errores de la API
+│   └── utils.py                get_object
 ├── data/datos.xlsx             Archivo de entrada del enunciado
+├── .env.example                Plantilla de variables de entorno
 └── portafolios/
     ├── models.py               Activo, Portafolio, Precio y Posicion
     ├── etl.py                  ETL de datos.xlsx
     ├── services.py             Cálculo de las cantidades iniciales
     ├── selectors.py            Consultas: evolución de V_t, x_i,t y w_i,t
     ├── apis.py                 Endpoints REST
+    ├── admin.py                Admin de solo lectura
     ├── views.py                Vista de gráficos
     ├── urls.py                 Rutas de la vista y de la API
     ├── management/commands/    cargar_datos y calcular_cantidades
@@ -400,6 +447,58 @@ Otras decisiones:
   antes de t = 0 las cantidades no están definidas.
 - **Si el portafolio no tiene las cantidades calculadas**, la API responde
   `409 Conflict` en lugar de devolver valores vacíos o incorrectos.
+- **El portafolio se obtiene en la API con `get_object`**, la utilidad que
+  propone el Django-Styleguide, que devuelve `None` en vez de lanzar `Http404`.
+
+### Manejo de errores
+
+Se sigue la propuesta del Django-Styleguide:
+
+- **Los errores de negocio heredan de `ApplicationError`** (`core/exceptions.py`),
+  que tiene `message` y `extra`. Lo hacen los errores del ETL, del cálculo de
+  cantidades y de la consulta de evolución.
+- **Un manejador central** (`core/exception_handlers.py`) da a todas las
+  respuestas de error la forma `{"message", "extra"}`. También convierte la
+  `ValidationError` de Django (por ejemplo, la de `full_clean()`) en un 400, en
+  lugar de dejar que termine en un error 500.
+- **Las APIs no capturan excepciones de negocio**: las traduce el manejador.
+- **Extensión propia:** `ApplicationError` tiene un `status_code` (400 por
+  defecto). Así el error de cantidades sin calcular responde 409.
+- **Los errores inesperados no se silencian** y terminan en un error 500.
+
+Los comandos también traducen estos errores a mensajes claros. Por ejemplo,
+`calcular_cantidades --valor-inicial 1000.555` informa que el valor admite
+como máximo 2 decimales, en vez de terminar con una traza de error.
+
+### Admin de solo lectura
+
+Los datos se modifican solo con los servicios. Si el admin permitiera
+editarlos, se podrían dejar weights que no suman 1 o cantidades que no
+corresponden al valor inicial guardado.
+
+### Orden por defecto de los modelos
+
+`Precio` y `Posicion` se ordenan por defecto por sus propias columnas
+(`fecha`, `activo_id`, `portafolio_id`). Ordenar por el nombre del activo o del
+portafolio agregaría dos JOINs a cada consulta sobre esos modelos. Hay una
+prueba que lo verifica, y el admin define su propio orden por nombre.
+
+### Diferencias con el Django-Styleguide
+
+Algunas recomendaciones de la guía no se aplicaron, porque no aportan en un
+proyecto de este tamaño:
+
+- **Un solo archivo de settings** en vez de `config/django/base.py`,
+  `local.py`, `production.py` y `test.py`. Lo que la guía busca, que nada
+  dependa del entorno salvo las variables, se cumple con `config/env.py`.
+- **Pruebas en archivos por módulo** (`tests/test_services.py`) en vez de
+  subcarpetas (`tests/services/test_<servicio>.py`), porque hay un solo
+  servicio y un solo selector principales.
+- **Sin factories de `factory_boy`.** La guía acepta `objects.create()` cuando
+  el proyecto no las tiene.
+- **Serializers anidados como clases** en vez de `inline_serializer`.
+- **El ETL usa nombres de etapas** (`extraer`, `transformar`, `cargar`) en
+  lugar de `<entidad>_<acción>`, porque describen mejor un proceso ETL.
 
 ### Vista de gráficos
 
@@ -438,15 +537,19 @@ Para aplicar el formato automáticamente: `python -m ruff format .`
 
 ### Pruebas
 
-Las 102 pruebas están organizadas por módulo en `portafolios/tests/`:
+Las 126 pruebas están organizadas por módulo en `core/tests/` y
+`portafolios/tests/`:
 
 | Archivo | Cubre |
 |---|---|
-| `test_models.py` | Restricciones de unicidad, rangos de valores y precisión decimal. |
+| `core/tests/test_exception_handlers.py` | Formato de cada tipo de error de la API. |
+| `core/tests/test_utils.py` | `get_object`. |
+| `test_models.py` | Restricciones de unicidad, rangos de valores, precisión decimal y orden por defecto sin JOINs. |
 | `test_etl.py` | Carga del archivo real, idempotencia, recarga y cada validación del ETL. |
-| `test_services.py` | Cálculo de las cantidades iniciales y sus errores. |
+| `test_services.py` | Cálculo de las cantidades iniciales, validación del valor inicial y errores del comando. |
 | `test_selectors.py` | Cálculo de x<sub>i,t</sub>, V<sub>t</sub> y w<sub>i,t</sub>, filtros de fecha y número de consultas. |
-| `test_apis.py` | Respuestas de la API y sus errores 400, 404 y 409. |
+| `test_apis.py` | Respuestas de la API y sus errores 400, 404, 405 y 409. |
+| `test_admin.py` | Admin de solo lectura. |
 | `test_views.py` | Vista de gráficos y archivos estáticos. |
 
 El JavaScript de los gráficos se verificó manualmente en el navegador, con el

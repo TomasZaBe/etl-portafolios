@@ -8,14 +8,21 @@ from operator import itemgetter
 from django.db.models import Count, F, FloatField, Q, QuerySet, Sum, Window
 from django.db.models.functions import Cast
 
+from core.exceptions import ApplicationError
 from portafolios.models import Portafolio, Precio
 
 DECIMALES_MONTO = 2
 DECIMALES_WEIGHT = 10
 
 
-class ErrorPortafolioSinCantidades(Exception):
-    """El portafolio no tiene sus cantidades iniciales calculadas."""
+class ErrorPortafolioSinCantidades(ApplicationError):
+    """El portafolio no tiene sus cantidades iniciales calculadas.
+
+    Se responde con 409 Conflict: la consulta es válida, pero el estado del
+    portafolio todavía no permite responderla.
+    """
+
+    status_code = 409
 
 
 @dataclass(frozen=True)

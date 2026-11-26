@@ -18,6 +18,7 @@ from pathlib import Path
 import pandas as pd
 from django.db import transaction
 
+from core.exceptions import ApplicationError
 from portafolios.models import Activo, Portafolio, Posicion, Precio
 
 HOJA_WEIGHTS = "weights"
@@ -31,12 +32,15 @@ TOLERANCIA_SUMA_WEIGHTS = Decimal("0.000001")
 MAX_EJEMPLOS_EN_ERROR = 5
 
 
-class ErrorValidacionETL(Exception):
-    """El archivo no tiene el formato o los valores esperados."""
+class ErrorValidacionETL(ApplicationError):
+    """El archivo no tiene el formato o los valores esperados.
 
-    def __init__(self, errores):
+    Reúne todos los errores encontrados en ``errores`` (y en ``extra``).
+    """
+
+    def __init__(self, errores: list[str]):
         self.errores = list(errores)
-        super().__init__("\n".join(self.errores))
+        super().__init__("El archivo no es válido.", extra={"errores": self.errores})
 
 
 @dataclass(frozen=True)

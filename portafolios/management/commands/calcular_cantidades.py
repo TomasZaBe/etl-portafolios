@@ -1,19 +1,23 @@
 from decimal import Decimal, InvalidOperation
 
+from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
 
+from core.exceptions import ApplicationError
 from portafolios.services import (
     VALOR_INICIAL_POR_DEFECTO,
-    ErrorCalculoCantidades,
     cantidades_iniciales_calcular,
 )
 
 
-def valor_decimal(texto):
+def valor_decimal(texto: str) -> Decimal:
     try:
-        return Decimal(texto)
+        valor = Decimal(texto)
     except InvalidOperation:
         raise ValueError(texto) from None
+    if not valor.is_finite():
+        raise ValueError(texto)
+    return valor
 
 
 class Command(BaseCommand):
@@ -34,8 +38,12 @@ class Command(BaseCommand):
     def handle(self, *args, valor_inicial, **options):
         try:
             resultado = cantidades_iniciales_calcular(valor_inicial=valor_inicial)
-        except ErrorCalculoCantidades as error:
-            raise CommandError(str(error)) from error
+        except ApplicationError as error:
+            raise CommandError(error.message) from error
+        except ValidationError as error:
+            raise CommandError(
+                "Valor inicial inválido: " + " ".join(error.messages)
+            ) from error
 
         for portafolio, posiciones in resultado.items():
             self.stdout.write(
