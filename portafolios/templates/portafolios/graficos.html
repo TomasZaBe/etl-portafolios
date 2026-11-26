@@ -1,0 +1,49 @@
+{% load static %}<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Evolución de portafolios</title>
+  <link rel="stylesheet" href="{% static 'portafolios/graficos.css' %}">
+</head>
+<body>
+  <header class="encabezado">
+    <h1>Evolución de portafolios</h1>
+    <p>Valor total V<sub>t</sub> y weights w<sub>i,t</sub> con cantidades constantes desde t = 0.</p>
+  </header>
+
+  <main
+    id="graficos"
+    data-url-portafolios="{% url 'portafolios:api-list' %}"
+    data-url-evolucion="{% url 'portafolios:api-evolucion' portafolio_id=0 %}"
+  >
+    <form id="filtros" class="filtros">
+      <label>
+        Fecha inicio
+        <input type="date" name="fecha_inicio">
+      </label>
+      <label>
+        Fecha fin
+        <input type="date" name="fecha_fin">
+      </label>
+      <button type="submit">Actualizar</button>
+      <button type="button" id="rango-completo" class="secundario">Rango completo</button>
+    </form>
+
+    <p id="mensaje" class="mensaje" role="status" hidden></p>
+
+    <section class="tarjeta">
+      <h2>Valor total V<sub>t</sub></h2>
+      <div id="resumen" class="resumen"></div>
+      <div class="lienzo lienzo-linea">
+        <canvas id="grafico-valor-total" aria-label="Gráfico de líneas del valor total de cada portafolio"></canvas>
+      </div>
+    </section>
+
+    <section id="graficos-weights" class="grilla-weights"></section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="{% static 'portafolios/graficos.js' %}"></script>
+</body>
+</html>
