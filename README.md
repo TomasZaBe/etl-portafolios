@@ -1,314 +1,104 @@
-# etl-portafolios
-ETL y API de portafolios con Django
 # ETL y API de portafolios con Django
 
-Proyecto de evaluación técnica para importar datos financieros desde Excel,
-modelar portafolios y consultar su evolución mediante una API REST y gráficos.
+Solución a la [pregunta técnica de Python](https://abaquscl.notion.site/Pregunta-t-cnica-Python-d00b3f926b0845edaec7f198919c83d4):
+un proyecto Django que carga los datos de `datos.xlsx`, calcula las cantidades
+iniciales de dos portafolios y expone la evolución de su valor total
+V<sub>t</sub> y de sus weights w<sub>i,t</sub> mediante una API REST y una
+vista con gráficos.
 
-## Estado del proyecto
+## Contenido
 
-En desarrollo.
+- [Resumen de la solución](#resumen-de-la-solución)
+- [Inicio rápido](#inicio-rápido)
+- [Resultados](#resultados)
+- [API](#api)
+- [Comandos](#comandos)
+- [Estructura del proyecto](#estructura-del-proyecto)
+- [Decisiones de diseño](#decisiones-de-diseño)
+- [Desarrollo](#desarrollo)
 
-- [x] Modelos de activos, portafolios, precios y posiciones.
-- [x] ETL para cargar `datos.xlsx` en la base de datos.
-- [x] Cálculo de las cantidades iniciales.
-- [x] API REST con los weights y el valor total entre dos fechas.
-- [x] Vista con los gráficos de evolución.
+## Resumen de la solución
 
-## Objetivo
-
-Calcular y visualizar la evolución del valor total y de los pesos de los activos
-de dos portafolios, utilizando los precios históricos y manteniendo constantes
-las cantidades iniciales de cada activo.
-
-## Requerimientos funcionales
-
-- Modelar activos, portafolios, precios y posiciones mediante Django.
-- Importar las hojas `weights` y `Precios` del archivo `datos.xlsx`.
-- Validar los datos antes de cargarlos en la base de datos.
-- Calcular las cantidades iniciales para cada portafolio con un valor inicial
-  de 1.000.000.000 al 15 de febrero de 2022.
-- Calcular los montos por activo, el valor total y los pesos de cada portafolio
-  utilizando el ORM de Django.
-- Exponer una API REST con filtros `fecha_inicio` y `fecha_fin`.
-- Crear una vista que consuma la API y muestre los pesos mediante un gráfico
-  de áreas apiladas y el valor total mediante un gráfico de línea.
-
-## Decisiones de diseño
-
-### Modelo de datos
-
-El dominio se modela con cuatro modelos:
-
-| Modelo | Representa | Origen |
+| Punto del enunciado | Solución | Dónde |
 |---|---|---|
-| `Activo` | Cada uno de los 17 activos invertibles | Hojas `weights` y `Precios` |
-| `Portafolio` | Portafolio, su valor inicial V₀ y su fecha de inicio t = 0 | Hoja `weights` y cálculo inicial |
-| `Precio` | Precio p<sub>i,t</sub> de un activo en una fecha | Hoja `Precios` |
-| `Posicion` | Activo dentro de un portafolio, con su weight inicial w<sub>i,0</sub> y su cantidad c<sub>i,0</sub> | Hoja `weights` y cálculo inicial |
+| 1. Modelar activos, portafolios, precios, cantidades, weights y montos | Modelos `Activo`, `Portafolio`, `Precio` y `Posicion`. Los montos, V<sub>t</sub> y w<sub>i,t</sub> se calculan, no se guardan. | `portafolios/models.py` |
+| 2. ETL que carga `datos.xlsx` | Comando `cargar_datos`: extrae, valida y carga en una transacción. | `portafolios/etl.py` |
+| 3. Cantidades iniciales C<sub>i,0</sub> con V<sub>0</sub> = 1.000.000.000 | Comando `calcular_cantidades`. | `portafolios/services.py` |
+| 4. API REST con `fecha_inicio` y `fecha_fin` que entrega w<sub>i,t</sub> y V<sub>t</sub> usando el ORM | `GET /api/portafolios/{id}/evolucion/`. Una única consulta del ORM calcula x<sub>i,t</sub>, V<sub>t</sub> y w<sub>i,t</sub>. | `portafolios/selectors.py`, `portafolios/apis.py` |
+| 5. Vista que usa la API: áreas apiladas para w<sub>i,t</sub> y líneas para V<sub>t</sub> | Página principal con Chart.js y filtro de fechas. | `portafolios/templates/`, `portafolios/static/` |
+| Bonus: Django-Styleguide | Lógica de escritura en servicios, consultas en selectores y APIs con serializers de filtros y de salida. | `services.py`, `selectors.py`, `apis.py` |
 
-Cada dato se guarda según aquello de lo que depende:
+El proyecto incluye 102 pruebas automatizadas y un workflow de integración
+continua que las ejecuta en cada pull request.
 
-- **El precio es un modelo propio** porque depende del activo y de la fecha
-  (17 activos × 367 fechas). Guardarlo como campo de `Activo` obligaría a usar
-  una columna por fecha o un JSON, y ninguna de las dos alternativas permite
-  calcular los montos con el ORM.
-- **El weight inicial y la cantidad son campos de `Posicion`** porque dependen
-  del par portafolio-activo y no de la fecha. El enunciado establece que las
-  cantidades se mantienen constantes (c<sub>i,t</sub> = c<sub>i,0</sub>), por lo
-  que basta con un registro por activo y portafolio. Guardarlos juntos asegura
-  que cada cantidad corresponda siempre a su weight inicial.
-- `Posicion` es el modelo intermedio de la relación muchos a muchos entre
-  `Portafolio` y `Activo`.
+## Inicio rápido
 
-### Valores calculados que no se almacenan
+Requisitos: Git y Python 3.12 o superior (requerido por Django 6.1). Los
+comandos están escritos para Windows.
 
-Los montos x<sub>i,t</sub> = p<sub>i,t</sub> · c<sub>i,0</sub>, el valor total
-V<sub>t</sub> = Σ x<sub>i,t</sub> y los weights w<sub>i,t</sub> = x<sub>i,t</sub> / V<sub>t</sub>
-se derivan de los precios. Por eso se calculan con el ORM al consultar la API y
-no se guardan en la base de datos. De esta forma no pueden quedar desalineados
-con los precios cargados y no se duplica información.
+**1. Clonar el repositorio**
 
-### Alternativa descartada
-
-Se evaluó modelar `Weight` y `Cantidad` como tablas separadas con fecha
-(portafolio, activo, fecha, valor). Esa estructura permitiría registrar
-rebalanceos, pero:
-
-- Agrega una generalidad que el enunciado no necesita, porque las cantidades
-  no cambian.
-- Complica la consulta de la API, que tendría que buscar la cantidad vigente en
-  cada fecha.
-- No garantiza que cada cantidad tenga su weight correspondiente.
-
-Si en el futuro se necesitaran rebalanceos, la cantidad pasaría a una tabla
-con fecha de vigencia.
-
-### Tipos numéricos
-
-Se usa `DecimalField` en lugar de `float` para no acumular errores de
-redondeo:
-
-- Precios con 6 decimales (el archivo trae hasta 5).
-- Weights con 6 decimales.
-- Cantidades con 10 decimales.
-
-### ETL
-
-El ETL está en `portafolios/etl.py` y se ejecuta con el comando
-`cargar_datos`. Tiene tres etapas separadas:
-
-1. **Extraer**: lee las hojas `weights` y `Precios`. Los nombres de hoja se
-   comparan sin distinguir mayúsculas, porque el enunciado dice "Weights" y el
-   archivo usa "weights".
-2. **Transformar y validar**: limpia los datos y reúne todos los errores antes
-   de tocar la base de datos.
-3. **Cargar**: guarda los datos en una única transacción.
-
-Particularidades del archivo que el ETL resuelve:
-
-- **El orden de los activos difiere entre hojas.** En `weights` el tercer
-  activo es UK y en `Precios` es Japón. Los activos se asocian por nombre,
-  nunca por posición.
-- **La hoja `weights` tiene cientos de filas vacías al final.** Se descartan
-  las filas y columnas completamente vacías.
-- **Los weights tienen ruido de punto flotante** (`0.018000000000000002`).
-  Se convierten a `Decimal` y se redondean a 6 decimales, con lo que cada
-  portafolio suma exactamente 1.
-
-Validaciones:
-
-- Existen ambas hojas y tienen la estructura esperada.
-- `weights` tiene una única fecha de inicio, activos sin repetir y weights
-  numéricos entre 0 y 1 que suman 1 en cada portafolio.
-- `Precios` tiene fechas válidas y sin repetir, y precios numéricos mayores
-  que 0.
-- Ambas hojas tienen los mismos activos.
-- Existen precios para la fecha de inicio, necesarios para calcular las
-  cantidades iniciales.
-
-La carga es idempotente: inserta o actualiza los registros, por lo que
-ejecutarla varias veces deja la base de datos en el mismo estado. Al recargar
-se vacían las cantidades y el valor inicial de los portafolios, porque sus
-weights o precios iniciales pueden haber cambiado; deben calcularse de nuevo
-después de cada carga.
-
-La fecha de los weights se guarda como fecha de inicio del portafolio. Por eso
-un portafolio puede tener fecha de inicio sin valor inicial, pero no al revés.
-
-### Cálculo de las cantidades iniciales
-
-El cálculo está en `portafolios/services.py`, siguiendo la convención del
-Django-Styleguide de ubicar la lógica de negocio en servicios.
-
-- **Las posiciones y su precio inicial se obtienen con el ORM en una sola
-  consulta**, anotando P<sub>i,0</sub> con un `Subquery` sobre `Precio` en la
-  fecha de inicio del portafolio.
-- **La división se hace en Python con `Decimal`.** SQLite opera los decimales
-  como números de punto flotante, por lo que calcular la cantidad en SQL
-  perdería precisión. Las cantidades se guardan con 10 decimales.
-- **V<sub>0</sub> se guarda en el portafolio** junto con las cantidades, para
-  que el resultado quede asociado al valor inicial con que se calculó.
-- **El cálculo es un paso separado de la carga**, igual que en el enunciado,
-  y recibe V<sub>0</sub> como parámetro en lugar de fijarlo en el código.
-- **Si falta algún dato** (fecha de inicio, posiciones o precio inicial de un
-  activo), no se guarda ninguna cantidad de ningún portafolio.
-
-### API
-
-La API usa Django REST Framework y sigue la estructura del Django-Styleguide:
-
-- `portafolios/selectors.py` contiene las consultas.
-- `portafolios/apis.py` contiene endpoints delgados. Cada uno valida la entrada
-  con un serializer de filtros y da forma a la respuesta con un serializer de
-  salida.
-
-**Los cálculos se hacen en la base de datos con una única consulta del ORM:**
-
-```python
-Precio.objects.filter(activo__posiciones__portafolio=portafolio, fecha__gte=..., fecha__lte=...)
-    .annotate(monto=Cast("valor", FloatField()) * Cast("activo__posiciones__cantidad", FloatField()))
-    .annotate(valor_total=Window(Sum("monto"), partition_by=F("fecha")))
-    .annotate(weight=F("monto") / F("valor_total"))
-```
-
-- El filtro une cada precio con la posición del activo en el portafolio, de
-  donde se obtiene c<sub>i,0</sub>.
-- x<sub>i,t</sub> = p<sub>i,t</sub> · c<sub>i,0</sub> se calcula fila a fila.
-- V<sub>t</sub> se obtiene con una función de ventana
-  (`SUM(...) OVER (PARTITION BY fecha)`), que suma los montos de cada fecha sin
-  colapsar las filas. Así, w<sub>i,t</sub> = x<sub>i,t</sub> / V<sub>t</sub>
-  se calcula en la misma consulta.
-
-El selector hace en total dos consultas: una para verificar que las cantidades
-estén calculadas y otra para los cálculos. Hay una prueba que lo verifica.
-
-Otras decisiones:
-
-- **La API entrega números de punto flotante.** Los montos y V<sub>t</sub> se
-  redondean a 2 decimales y los weights a 10. Los datos de entrada se siguen
-  guardando como `Decimal`; la conversión ocurre solo al calcular.
-- **Las fechas son opcionales.** Sin `fecha_inicio` ni `fecha_fin` se devuelve
-  todo el rango disponible, lo que simplifica la vista de gráficos.
-- **Solo se consideran fechas desde la fecha de inicio del portafolio**, porque
-  antes de t = 0 las cantidades no están definidas.
-- **Si el portafolio no tiene las cantidades calculadas**, la API responde
-  `409 Conflict` en lugar de devolver valores vacíos o incorrectos.
-
-### Vista de gráficos
-
-- **La vista consume la API desde el navegador**, como pide el enunciado. La
-  vista de Django solo entrega el HTML (`portafolios/views.py`) y no consulta la
-  base de datos; el JavaScript (`portafolios/static/portafolios/graficos.js`)
-  pide los portafolios y la evolución de cada uno a la API.
-- **Las URLs de la API se generan con `{% url %}`** y se pasan al JavaScript
-  como atributos `data-*`, para no repetir rutas fijas en el código del
-  navegador.
-- **Gráficos con Chart.js 4.4.1** cargado desde un CDN, sin paso de
-  compilación:
-  - Un gráfico de líneas compara el V<sub>t</sub> de ambos portafolios en el
-    mismo eje, con un resumen de la variación en el rango.
-  - Un gráfico de áreas apiladas por portafolio muestra los w<sub>i,t</sub>,
-    que suman 100 % en cada fecha.
-- **Cada activo tiene un color fijo** en ambos gráficos de weights, tomado de
-  la paleta de máximo contraste de Kelly, para que los 17 activos se distingan.
-- **Los errores de la API se muestran en la página**, por ejemplo un rango de
-  fechas inválido o cantidades sin calcular.
-
-## Criterios de finalización
-
-- La importación y los cálculos cuentan con pruebas automatizadas.
-- La API valida los parámetros y devuelve los resultados del rango solicitado.
-- La vista permite consultar y visualizar los portafolios.
-- El README explica cómo instalar, ejecutar y probar el proyecto.
-- Los cambios se integran mediante pull requests y pasan las verificaciones
-  de integración continua.
-
-## Instalación y ejecución local
-
-### Requisitos previos
-
-- Git.
-- Python 3.12 o superior (requerido por Django 6.1). El CI usa Python 3.15.
-- Los comandos de este README están escritos para Windows (CMD y PowerShell).
-
-### Clonar el repositorio
-
-```bat
+```powershell
 git clone https://github.com/TomasZaBe/etl-portafolios.git
 cd etl-portafolios
 ```
 
-### Crear y activar el entorno virtual
+**2. Crear y activar el entorno virtual**
 
-```bat
+```powershell
 python -m venv .venv
-.venv\Scripts\activate.bat
 ```
 
-En PowerShell, la activación es:
+En PowerShell:
 
 ```powershell
 .venv\Scripts\Activate.ps1
 ```
 
-Si PowerShell bloquea el script por la política de ejecución, se puede
-habilitar solo para la sesión actual:
+En CMD:
 
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
+```bat
+.venv\Scripts\activate.bat
 ```
 
 Con el entorno activado, el prompt muestra `(.venv)` al inicio. Todos los
-comandos `python` de este README asumen que el entorno está activado.
+comandos `python` de este README asumen que el entorno está activado. Si
+PowerShell bloquea el script de activación, se puede habilitar solo para la
+sesión actual con
+`Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned`.
 
-### Instalar las dependencias
+**3. Instalar las dependencias y crear la base de datos**
 
-```bat
+```powershell
 python -m pip install -r requirements.txt
-```
-
-### Preparar la base de datos local
-
-```bat
 python manage.py migrate
 ```
 
-El proyecto utiliza SQLite para el desarrollo local. La base de datos
-db.sqlite3 no se incluye en el repositorio.
+El proyecto usa SQLite. La base de datos `db.sqlite3` se crea localmente y no
+se incluye en el repositorio.
 
-### Cargar los datos
+**4. Cargar los datos y calcular las cantidades iniciales**
 
-```bat
+```powershell
 python manage.py cargar_datos
-```
-
-Por defecto lee `data/datos.xlsx`, el archivo entregado en el enunciado, que
-se incluye en el repositorio. Para usar otro archivo:
-
-```bat
-python manage.py cargar_datos --archivo ruta\al\archivo.xlsx
-```
-
-Si el archivo no es válido, el comando lista todos los errores encontrados y no
-modifica la base de datos.
-
-### Calcular las cantidades iniciales
-
-```bat
 python manage.py calcular_cantidades
 ```
 
-Calcula C<sub>i,0</sub> = w<sub>i,0</sub> · V<sub>0</sub> / P<sub>i,0</sub>
-para cada activo de cada portafolio, con V<sub>0</sub> = 1.000.000.000 por
-defecto, y muestra el resultado. Para usar otro valor inicial:
+`cargar_datos` lee `data/datos.xlsx`, el archivo del enunciado, que se incluye
+en el repositorio. `calcular_cantidades` muestra en la terminal la tabla de
+cantidades iniciales.
 
-```bat
-python manage.py calcular_cantidades --valor-inicial 500000000
+**5. Iniciar el servidor**
+
+```powershell
+python manage.py runserver
 ```
 
-Debe ejecutarse después de cada `cargar_datos`, porque la carga deja vacías las
-cantidades calculadas.
+- http://127.0.0.1:8000/: vista con los gráficos de evolución.
+- http://127.0.0.1:8000/api/portafolios/: API REST. Al abrirla en el navegador,
+  Django REST Framework muestra una interfaz navegable.
+
+Para detener el servidor, pulsar Ctrl + C en la terminal.
 
 ## Resultados
 
@@ -340,34 +130,15 @@ valores se muestran redondeados a 4 decimales; la base de datos guarda 10.
 Como comprobación, Σ C<sub>i,0</sub> · P<sub>i,0</sub> reconstruye
 V<sub>0</sub> en ambos portafolios con una diferencia menor a 0,000001.
 
-### Verificar la configuración
+### Valor total al final del período
 
-```bat
-python manage.py check
-```
+| Portafolio | V<sub>t</sub> al 15/02/2022 | V<sub>t</sub> al 16/02/2023 | Variación |
+|---|---:|---:|---:|
+| Portafolio 1 | 1.000.000.000,00 | 929.055.490,74 | −7,09 % |
+| Portafolio 2 | 1.000.000.000,00 | 923.548.704,77 | −7,65 % |
 
-### Iniciar el servidor de desarrollo
-
-```bat
-python manage.py runserver
-```
-
-Abrir http://127.0.0.1:8000/ en el navegador.
-
-Para detener el servidor, pulsar Ctrl + C en la terminal.
-
-La página principal muestra los gráficos de evolución:
-
-- Un gráfico de líneas con el valor total V<sub>t</sub> de ambos portafolios.
-- Un gráfico de áreas apiladas con los weights w<sub>i,t</sub> de cada
-  portafolio.
-
-Los campos de fecha filtran el rango y el botón "Rango completo" vuelve a
-mostrar todo el período. La vista requiere haber ejecutado antes
-`cargar_datos` y `calcular_cantidades`.
-
-La API está disponible en http://127.0.0.1:8000/api/portafolios/; al abrirla
-en el navegador, Django REST Framework muestra una interfaz navegable.
+La evolución completa de V<sub>t</sub> y de los w<sub>i,t</sub> se puede
+consultar en la vista de gráficos o en la API.
 
 ## API
 
@@ -428,58 +199,271 @@ Respuestas de error:
 | `404` | No existe el portafolio. |
 | `409` | El portafolio no tiene sus cantidades iniciales calculadas. |
 
-## Verificaciones de desarrollo
+## Comandos
 
-Con el entorno virtual activo, ejecutar:
+### `cargar_datos`
 
-### Revisión de código
+```powershell
+python manage.py cargar_datos
+python manage.py cargar_datos --archivo ruta\al\archivo.xlsx
+```
 
-```bat
+Carga activos, portafolios, weights iniciales y precios. Por defecto lee
+`data/datos.xlsx`. Si el archivo no es válido, lista todos los errores
+encontrados y no modifica la base de datos.
+
+La carga es idempotente: ejecutarla varias veces deja la base de datos en el
+mismo estado. Al recargar se vacían las cantidades calculadas, por lo que hay
+que volver a ejecutar `calcular_cantidades`.
+
+### `calcular_cantidades`
+
+```powershell
+python manage.py calcular_cantidades
+python manage.py calcular_cantidades --valor-inicial 500000000
+```
+
+Calcula C<sub>i,0</sub> = w<sub>i,0</sub> · V<sub>0</sub> / P<sub>i,0</sub>
+para cada activo de cada portafolio y muestra el resultado. Por defecto usa
+V<sub>0</sub> = 1.000.000.000.
+
+## Estructura del proyecto
+
+```text
+etl-portafolios/
+├── config/                     Configuración del proyecto Django
+├── data/datos.xlsx             Archivo de entrada del enunciado
+└── portafolios/
+    ├── models.py               Activo, Portafolio, Precio y Posicion
+    ├── etl.py                  ETL de datos.xlsx
+    ├── services.py             Cálculo de las cantidades iniciales
+    ├── selectors.py            Consultas: evolución de V_t, x_i,t y w_i,t
+    ├── apis.py                 Endpoints REST
+    ├── views.py                Vista de gráficos
+    ├── urls.py                 Rutas de la vista y de la API
+    ├── management/commands/    cargar_datos y calcular_cantidades
+    ├── templates/portafolios/  HTML de la vista
+    ├── static/portafolios/     JavaScript y CSS de los gráficos
+    ├── migrations/
+    └── tests/                  Pruebas por módulo
+```
+
+## Decisiones de diseño
+
+### Modelo de datos
+
+El dominio se modela con cuatro modelos:
+
+| Modelo | Representa | Origen |
+|---|---|---|
+| `Activo` | Cada uno de los 17 activos invertibles | Hojas `weights` y `Precios` |
+| `Portafolio` | Portafolio, su valor inicial V<sub>0</sub> y su fecha de inicio t = 0 | Hoja `weights` y cálculo inicial |
+| `Precio` | Precio p<sub>i,t</sub> de un activo en una fecha | Hoja `Precios` |
+| `Posicion` | Activo dentro de un portafolio, con su weight inicial w<sub>i,0</sub> y su cantidad c<sub>i,0</sub> | Hoja `weights` y cálculo inicial |
+
+Cada dato se guarda según aquello de lo que depende:
+
+- **El precio es un modelo propio** porque depende del activo y de la fecha
+  (17 activos × 367 fechas). Guardarlo como campo de `Activo` obligaría a usar
+  una columna por fecha o un JSON, y ninguna de las dos alternativas permite
+  calcular los montos con el ORM.
+- **El weight inicial y la cantidad son campos de `Posicion`** porque dependen
+  del par portafolio-activo y no de la fecha. El enunciado establece que las
+  cantidades se mantienen constantes (c<sub>i,t</sub> = c<sub>i,0</sub>), por lo
+  que basta con un registro por activo y portafolio. Guardarlos juntos asegura
+  que cada cantidad corresponda siempre a su weight inicial.
+- `Posicion` es el modelo intermedio de la relación muchos a muchos entre
+  `Portafolio` y `Activo`.
+
+### Valores calculados que no se almacenan
+
+Los montos x<sub>i,t</sub> = p<sub>i,t</sub> · c<sub>i,0</sub>, el valor total
+V<sub>t</sub> = Σ x<sub>i,t</sub> y los weights w<sub>i,t</sub> = x<sub>i,t</sub> / V<sub>t</sub>
+se derivan de los precios. Por eso se calculan con el ORM al consultar la API y
+no se guardan en la base de datos. De esta forma no pueden quedar desalineados
+con los precios cargados y no se duplica información.
+
+### Alternativa descartada
+
+Se evaluó modelar `Weight` y `Cantidad` como tablas separadas con fecha
+(portafolio, activo, fecha, valor). Esa estructura permitiría registrar
+rebalanceos, pero:
+
+- Agrega una generalidad que el enunciado no necesita, porque las cantidades
+  no cambian.
+- Complica la consulta de la API, que tendría que buscar la cantidad vigente en
+  cada fecha.
+- No garantiza que cada cantidad tenga su weight correspondiente.
+
+Si en el futuro se necesitaran rebalanceos, la cantidad pasaría a una tabla
+con fecha de vigencia.
+
+### Tipos numéricos
+
+Se usa `DecimalField` en lugar de `float` para no acumular errores de
+redondeo:
+
+- Precios con 6 decimales (el archivo trae hasta 5).
+- Weights con 6 decimales.
+- Cantidades con 10 decimales.
+
+### ETL
+
+El ETL tiene tres etapas separadas:
+
+1. **Extraer**: lee las hojas `weights` y `Precios`. Los nombres de hoja se
+   comparan sin distinguir mayúsculas, porque el enunciado dice "Weights" y el
+   archivo usa "weights".
+2. **Transformar y validar**: limpia los datos y reúne todos los errores antes
+   de tocar la base de datos.
+3. **Cargar**: guarda los datos en una única transacción.
+
+Particularidades del archivo que el ETL resuelve:
+
+- **El orden de los activos difiere entre hojas.** En `weights` el tercer
+  activo es UK y en `Precios` es Japón. Los activos se asocian por nombre,
+  nunca por posición.
+- **La hoja `weights` tiene cientos de filas vacías al final.** Se descartan
+  las filas y columnas completamente vacías.
+- **Los weights tienen ruido de punto flotante** (`0.018000000000000002`).
+  Se convierten a `Decimal` y se redondean a 6 decimales, con lo que cada
+  portafolio suma exactamente 1.
+
+Validaciones:
+
+- Existen ambas hojas y tienen la estructura esperada.
+- `weights` tiene una única fecha de inicio, activos sin repetir y weights
+  numéricos entre 0 y 1 que suman 1 en cada portafolio.
+- `Precios` tiene fechas válidas y sin repetir, y precios numéricos mayores
+  que 0.
+- Ambas hojas tienen los mismos activos.
+- Existen precios para la fecha de inicio, necesarios para calcular las
+  cantidades iniciales.
+
+La carga inserta o actualiza los registros, por lo que es idempotente. Al
+recargar se vacían las cantidades y el valor inicial de los portafolios, porque
+sus weights o precios iniciales pueden haber cambiado.
+
+La fecha de los weights se guarda como fecha de inicio del portafolio. Por eso
+un portafolio puede tener fecha de inicio sin valor inicial, pero no al revés.
+
+### Cálculo de las cantidades iniciales
+
+- **Las posiciones y su precio inicial se obtienen con el ORM en una sola
+  consulta**, anotando P<sub>i,0</sub> con un `Subquery` sobre `Precio` en la
+  fecha de inicio del portafolio.
+- **La división se hace en Python con `Decimal`.** SQLite opera los decimales
+  como números de punto flotante, por lo que calcular la cantidad en SQL
+  perdería precisión. Las cantidades se guardan con 10 decimales.
+- **V<sub>0</sub> se guarda en el portafolio** junto con las cantidades, para
+  que el resultado quede asociado al valor inicial con que se calculó.
+- **El cálculo es un paso separado de la carga**, igual que en el enunciado,
+  y recibe V<sub>0</sub> como parámetro en lugar de fijarlo en el código.
+- **Si falta algún dato** (fecha de inicio, posiciones o precio inicial de un
+  activo), no se guarda ninguna cantidad de ningún portafolio.
+
+### API
+
+La API usa Django REST Framework y sigue la estructura del Django-Styleguide:
+`selectors.py` contiene las consultas y `apis.py` contiene endpoints delgados,
+que validan la entrada con un serializer de filtros y dan forma a la respuesta
+con un serializer de salida.
+
+**Los cálculos se hacen en la base de datos con una única consulta del ORM:**
+
+```python
+Precio.objects.filter(activo__posiciones__portafolio=portafolio, fecha__gte=..., fecha__lte=...)
+    .annotate(monto=Cast("valor", FloatField()) * Cast("activo__posiciones__cantidad", FloatField()))
+    .annotate(valor_total=Window(Sum("monto"), partition_by=F("fecha")))
+    .annotate(weight=F("monto") / F("valor_total"))
+```
+
+- El filtro une cada precio con la posición del activo en el portafolio, de
+  donde se obtiene c<sub>i,0</sub>.
+- x<sub>i,t</sub> = p<sub>i,t</sub> · c<sub>i,0</sub> se calcula fila a fila.
+- V<sub>t</sub> se obtiene con una función de ventana
+  (`SUM(...) OVER (PARTITION BY fecha)`), que suma los montos de cada fecha sin
+  colapsar las filas. Así, w<sub>i,t</sub> = x<sub>i,t</sub> / V<sub>t</sub>
+  se calcula en la misma consulta.
+
+El selector hace en total dos consultas: una para verificar que las cantidades
+estén calculadas y otra para los cálculos. Hay una prueba que lo verifica.
+
+Otras decisiones:
+
+- **La API entrega números de punto flotante.** Los montos y V<sub>t</sub> se
+  redondean a 2 decimales y los weights a 10. Los datos de entrada se siguen
+  guardando como `Decimal`; la conversión ocurre solo al calcular.
+- **Las fechas son opcionales.** Sin `fecha_inicio` ni `fecha_fin` se devuelve
+  todo el rango disponible, lo que simplifica la vista de gráficos.
+- **Solo se consideran fechas desde la fecha de inicio del portafolio**, porque
+  antes de t = 0 las cantidades no están definidas.
+- **Si el portafolio no tiene las cantidades calculadas**, la API responde
+  `409 Conflict` en lugar de devolver valores vacíos o incorrectos.
+
+### Vista de gráficos
+
+- **La vista consume la API desde el navegador**, como pide el enunciado. La
+  vista de Django solo entrega el HTML y no consulta la base de datos; el
+  JavaScript pide los portafolios y la evolución de cada uno a la API.
+- **Las URLs de la API se generan con `{% url %}`** y se pasan al JavaScript
+  como atributos `data-*`, para no repetir rutas fijas en el código del
+  navegador.
+- **Gráficos con Chart.js 4.4.1** cargado desde un CDN, sin paso de
+  compilación:
+  - Un gráfico de líneas compara el V<sub>t</sub> de ambos portafolios en el
+    mismo eje, con un resumen de la variación en el rango.
+  - Un gráfico de áreas apiladas por portafolio muestra los w<sub>i,t</sub>,
+    que suman 100 % en cada fecha.
+- **Cada activo tiene un color fijo** en ambos gráficos de weights, tomado de
+  la paleta de máximo contraste de Kelly, para que los 17 activos se distingan.
+- **Los errores de la API se muestran en la página**, por ejemplo un rango de
+  fechas inválido o cantidades sin calcular.
+
+## Desarrollo
+
+### Verificaciones
+
+Con el entorno virtual activado:
+
+```powershell
 python -m ruff check .
-```
-
-### Comprobación del formato
-
-```bat
 python -m ruff format --check .
-```
-
-Para aplicar el formato automáticamente:
-
-```bat
-python -m ruff format .
-```
-
-### Comprobación de Django
-
-```bat
 python manage.py check
-```
-
-### Pruebas automatizadas
-
-```bat
+python manage.py makemigrations --check --dry-run
 python manage.py test
 ```
 
-Actualmente las pruebas cubren las restricciones de los modelos, el ETL y
-el cálculo de las cantidades iniciales, incluidas cargas completas del
-archivo real, los cálculos de la API y sus respuestas de error, y la vista de
-gráficos. El JavaScript de los gráficos se verificó manualmente en el
-navegador.
+Para aplicar el formato automáticamente: `python -m ruff format .`
 
-## Integración continua
+### Pruebas
 
-El workflow de GitHub Actions se ejecuta en pull requests hacia main
-y cuando se publican cambios en main.
+Las 102 pruebas están organizadas por módulo en `portafolios/tests/`:
 
-Utiliza Python 3.15 y las dependencias fijadas en requirements.txt.
+| Archivo | Cubre |
+|---|---|
+| `test_models.py` | Restricciones de unicidad, rangos de valores y precisión decimal. |
+| `test_etl.py` | Carga del archivo real, idempotencia, recarga y cada validación del ETL. |
+| `test_services.py` | Cálculo de las cantidades iniciales y sus errores. |
+| `test_selectors.py` | Cálculo de x<sub>i,t</sub>, V<sub>t</sub> y w<sub>i,t</sub>, filtros de fecha y número de consultas. |
+| `test_apis.py` | Respuestas de la API y sus errores 400, 404 y 409. |
+| `test_views.py` | Vista de gráficos y archivos estáticos. |
 
-Verifica:
+El JavaScript de los gráficos se verificó manualmente en el navegador, con el
+rango completo, un rango filtrado, un rango inválido, un rango sin datos y el
+ancho de un teléfono.
+
+### Integración continua
+
+El workflow de GitHub Actions (`.github/workflows/ci.yml`) se ejecuta en cada
+pull request hacia `main` y en cada cambio publicado en `main`. Usa Python 3.15
+y las dependencias fijadas en `requirements.txt`, y verifica:
+
 - Compatibilidad de las dependencias instaladas.
-- Revisión de código y formato mediante Ruff.
+- Revisión de código y formato con Ruff.
 - Configuración de Django.
-- Ausencia de cambios en modelos sin su correspondiente migración.
-- Ejecución de pruebas automatizadas.
+- Ausencia de cambios en los modelos sin su migración.
+- Ejecución de todas las pruebas.
 
-El workflow ejecuta todas las pruebas de la aplicación.
+Los cambios se integraron mediante pull requests, uno por cada punto del
+enunciado.
