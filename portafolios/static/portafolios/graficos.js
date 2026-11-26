@@ -13,11 +13,12 @@
   const contenedorWeights = document.getElementById("graficos-weights");
 
   // Un color fijo por activo, para que se lea igual en ambos portafolios.
-  // Colores de máximo contraste de Kelly, sin blanco ni negro.
+  // Colores de máximo contraste de Kelly, sin blanco ni negro. Se omite el
+  // amarillo verdoso (#dcd300), que se confunde con el amarillo (#f3c300).
   const PALETA = [
     "#0067a5", "#f38400", "#008856", "#be0032", "#875692", "#f3c300",
     "#a1caf1", "#882d17", "#8db600", "#e68fac", "#848482", "#604e97",
-    "#f99379", "#c2b280", "#b3446c", "#dcd300", "#2b3d26",
+    "#f99379", "#c2b280", "#b3446c", "#e25822", "#2b3d26",
   ];
   const COLORES_PORTAFOLIO = ["#1f5fbf", "#d9480f", "#2b8a3e", "#862e9c"];
 
