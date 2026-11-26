@@ -259,5 +259,7 @@ class ComandoCalcularCantidadesTests(CantidadesTestCase):
     def test_rechaza_valores_no_numericos_o_no_finitos(self):
         for valor in ("abc", "NaN", "Infinity"):
             with self.subTest(valor=valor):
-                with self.assertRaises(CommandError):
+                with self.assertRaisesMessage(
+                    CommandError, f"'{valor}' no es un número válido."
+                ):
                     call_command("calcular_cantidades", f"--valor-inicial={valor}")

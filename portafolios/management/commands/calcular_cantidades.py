@@ -1,3 +1,4 @@
+from argparse import ArgumentTypeError
 from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import ValidationError
@@ -11,12 +12,13 @@ from portafolios.services import (
 
 
 def valor_decimal(texto: str) -> Decimal:
+    mensaje = f"'{texto}' no es un número válido."
     try:
         valor = Decimal(texto)
     except InvalidOperation:
-        raise ValueError(texto) from None
+        raise ArgumentTypeError(mensaje) from None
     if not valor.is_finite():
-        raise ValueError(texto)
+        raise ArgumentTypeError(mensaje)
     return valor
 
 
