@@ -14,15 +14,7 @@ está en la sección "Decisiones de diseño" del README.
 
 from django.db import models
 
-
-class BaseModel(models.Model):
-    """Campos de auditoría comunes a todos los modelos."""
-
-    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        abstract = True
+from core.models import BaseModel
 
 
 class Activo(BaseModel):
@@ -81,7 +73,8 @@ class Precio(BaseModel):
     valor = models.DecimalField(max_digits=18, decimal_places=6)
 
     class Meta:
-        ordering = ["fecha", "activo__nombre"]
+        # Se ordena por columnas propias para no agregar JOINs a cada consulta.
+        ordering = ["fecha", "activo_id"]
         constraints = [
             models.UniqueConstraint(
                 fields=["activo", "fecha"], name="precio_unico_por_activo_y_fecha"
@@ -117,7 +110,8 @@ class Posicion(BaseModel):
     class Meta:
         verbose_name = "posición"
         verbose_name_plural = "posiciones"
-        ordering = ["portafolio__nombre", "activo__nombre"]
+        # Se ordena por columnas propias para no agregar JOINs a cada consulta.
+        ordering = ["portafolio_id", "activo_id"]
         constraints = [
             models.UniqueConstraint(
                 fields=["portafolio", "activo"],

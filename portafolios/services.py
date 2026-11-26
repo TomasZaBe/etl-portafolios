@@ -1,11 +1,13 @@
 """Servicios con la lógica de negocio que modifica los portafolios."""
 
-from decimal import Decimal
+from decimal import Decimal, localcontext
 
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import OuterRef, Subquery
 from django.utils import timezone
 
+from core.exceptions import ApplicationError
 from portafolios.models import Portafolio, Posicion, Precio
 
 VALOR_INICIAL_POR_DEFECTO = Decimal("1000000000")
@@ -13,9 +15,13 @@ VALOR_INICIAL_POR_DEFECTO = Decimal("1000000000")
 # Precisión del campo Posicion.cantidad.
 PRECISION_CANTIDAD = Decimal("1E-10")
 
+# Precisión de trabajo para la división. Supera los dígitos máximos de los
+# campos para que el resultado pueda validarse antes de guardarse.
+PRECISION_CALCULO = 60
 
-class ErrorCalculoCantidades(Exception):
-    """Faltan los datos necesarios para calcular las cantidades iniciales."""
+
+class ErrorCalculoCantidades(ApplicationError):
+    """Faltan datos o los valores no permiten calcular las cantidades."""
 
 
 @transaction.atomic
@@ -23,6 +29,9 @@ def portafolio_cantidades_iniciales_calcular(
     *, portafolio: Portafolio, valor_inicial: Decimal = VALOR_INICIAL_POR_DEFECTO
 ) -> list[Posicion]:
     """Calcula y guarda c_i,0 = w_i,0 * V_0 / p_i,0 para cada posición.
+
+    Lanza ``ValidationError`` si V_0 no cumple las reglas del campo (dígitos o
+    decimales) y ``ErrorCalculoCantidades`` si faltan datos para el cálculo.
 
     Los precios iniciales p_i,0 se obtienen con el ORM en la misma consulta que
     las posiciones. La división se hace en Python con ``Decimal`` porque SQLite
@@ -33,8 +42,10 @@ def portafolio_cantidades_iniciales_calcular(
     por carga de datos.
     """
     valor_inicial = Decimal(valor_inicial)
-    if valor_inicial <= 0:
+    if not valor_inicial.is_finite() or valor_inicial <= 0:
         raise ErrorCalculoCantidades("El valor inicial debe ser mayor que 0.")
+    # Valida dígitos y decimales antes de calcular, con las reglas del campo.
+    Portafolio._meta.get_field("valor_inicial").clean(valor_inicial, portafolio)
     if portafolio.fecha_inicio is None:
         raise ErrorCalculoCantidades(
             f"El portafolio '{portafolio}' no tiene fecha de inicio. "
@@ -59,12 +70,22 @@ def portafolio_cantidades_iniciales_calcular(
             f"{', '.join(sin_precio)}."
         )
 
-    # bulk_update no actualiza los campos auto_now.
+    # bulk_update no valida los campos ni actualiza los campos auto_now.
+    campo_cantidad = Posicion._meta.get_field("cantidad")
     ahora = timezone.now()
     for posicion in posiciones:
-        posicion.cantidad = (
-            posicion.weight_inicial * valor_inicial / posicion.precio_inicial
-        ).quantize(PRECISION_CANTIDAD)
+        with localcontext(prec=PRECISION_CALCULO):
+            posicion.cantidad = (
+                posicion.weight_inicial * valor_inicial / posicion.precio_inicial
+            ).quantize(PRECISION_CANTIDAD)
+        try:
+            campo_cantidad.run_validators(posicion.cantidad)
+        except ValidationError as error:
+            raise ErrorCalculoCantidades(
+                f"La cantidad calculada para '{posicion.activo}' "
+                f"({posicion.cantidad}) excede la precisión permitida.",
+                extra={"errores": error.messages},
+            ) from error
         posicion.updated_at = ahora
     Posicion.objects.bulk_update(posiciones, ["cantidad", "updated_at"])
 

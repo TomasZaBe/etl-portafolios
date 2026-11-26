@@ -12,20 +12,29 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 
 from pathlib import Path
 
+from config.env import env
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Las variables pueden definirse en un archivo .env (ver .env.example).
+if (BASE_DIR / ".env").is_file():
+    env.read_env(BASE_DIR / ".env")
 
-# Quick-start development settings - unsuitable for production
+
+# La configuración se lee desde variables de entorno. Los valores por defecto
+# solo sirven para desarrollo local; en producción deben definirse
+# DJANGO_SECRET_KEY, DJANGO_DEBUG=False y DJANGO_ALLOWED_HOSTS.
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-g#9k-4ce52a*il+xgbf+z_4+*6&95g14ef^gku=!om26tx-v4u"
+SECRET_KEY = env(
+    "DJANGO_SECRET_KEY",
+    default="django-insecure-solo-para-desarrollo-local",
+)
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env.bool("DJANGO_DEBUG", default=True)
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=[])
 
 
 # Application definition
@@ -38,6 +47,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    "core.apps.CoreConfig",
     "portafolios.apps.PortafoliosConfig",
 ]
 
@@ -117,6 +127,15 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = "static/"
+
+
+# Django REST Framework
+# Los errores de la API se devuelven con el formato propuesto por el
+# Django-Styleguide: {"message": ..., "extra": {...}}.
+
+REST_FRAMEWORK = {
+    "EXCEPTION_HANDLER": "core.exception_handlers.manejador_de_excepciones",
+}
 
 
 # Email

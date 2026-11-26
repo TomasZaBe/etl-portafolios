@@ -128,6 +128,11 @@ class PosicionTests(ModelosTestCase):
         self.assertQuerySetEqual(self.portafolio.activos.all(), [self.activo])
         self.assertQuerySetEqual(self.activo.portafolios.all(), [self.portafolio])
 
+    def test_el_orden_por_defecto_no_agrega_joins(self):
+        for consulta in (Posicion.objects.all(), Precio.objects.all()):
+            with self.subTest(modelo=consulta.model.__name__):
+                self.assertNotIn("JOIN", str(consulta.query))
+
     def test_se_elimina_con_su_portafolio(self):
         self.crear_posicion()
         self.portafolio.delete()

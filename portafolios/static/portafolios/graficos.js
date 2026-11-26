@@ -51,11 +51,14 @@
     return datos;
   }
 
+  // Los errores de la API tienen la forma {"message": ..., "extra": {...}}.
+  // En los errores de validación, extra.fields trae el detalle por campo.
   function describirError(datos) {
-    if (datos.detail) return datos.detail;
-    return Object.entries(datos)
+    const campos = (datos.extra && datos.extra.fields) || {};
+    const detalle = Object.entries(campos)
       .map(([campo, errores]) => `${campo}: ${[].concat(errores).join(" ")}`)
       .join(" ");
+    return [datos.message, detalle].filter(Boolean).join(". ");
   }
 
   function mostrarMensaje(texto) {
