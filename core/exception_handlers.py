@@ -49,6 +49,12 @@ def manejador_de_excepciones(exc, ctx):
             "message": MENSAJE_VALIDACION,
             "extra": {"fields": response.data},
         }
+    elif isinstance(exc.detail, (list, dict)):
+        # DRF entrega estos detalles sin la clave "detail"; se conservan en extra.
+        response.data = {
+            "message": str(exc.default_detail),
+            "extra": {"detail": exc.detail},
+        }
     else:
         response.data = {"message": response.data["detail"], "extra": {}}
 

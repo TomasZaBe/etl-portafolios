@@ -30,7 +30,7 @@ vista con gráficos.
 | 5. Vista que usa la API: áreas apiladas para w<sub>i,t</sub> y líneas para V<sub>t</sub> | Página principal con Chart.js y filtro de fechas. | `portafolios/templates/`, `portafolios/static/` |
 | Bonus: Django-Styleguide | Lógica de escritura en servicios, consultas en selectores, APIs con serializers de filtros y de salida, errores con `ApplicationError` y un manejador central, y configuración con variables de entorno. | `services.py`, `selectors.py`, `apis.py`, `core/`, `config/env.py` |
 
-El proyecto incluye 126 pruebas automatizadas y un workflow de integración
+El proyecto incluye 127 pruebas automatizadas y un workflow de integración
 continua que las ejecuta en cada pull request.
 
 ## Inicio rápido
@@ -492,8 +492,8 @@ proyecto de este tamaño:
   `local.py`, `production.py` y `test.py`. Lo que la guía busca, que nada
   dependa del entorno salvo las variables, se cumple con `config/env.py`.
 - **Pruebas en archivos por módulo** (`tests/test_services.py`) en vez de
-  subcarpetas (`tests/services/test_<servicio>.py`), porque hay un solo
-  servicio y un solo selector principales.
+  subcarpetas (`tests/services/test_<servicio>.py`), porque cada módulo tiene
+  pocas funciones: dos servicios, dos selectores y el ETL.
 - **Sin factories de `factory_boy`.** La guía acepta `objects.create()` cuando
   el proyecto no las tiene.
 - **Serializers anidados como clases** en vez de `inline_serializer`.
@@ -537,7 +537,7 @@ Para aplicar el formato automáticamente: `python -m ruff format .`
 
 ### Pruebas
 
-Las 126 pruebas están organizadas por módulo en `core/tests/` y
+Las 127 pruebas están organizadas por módulo en `core/tests/` y
 `portafolios/tests/`:
 
 | Archivo | Cubre |

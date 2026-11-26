@@ -69,5 +69,18 @@ class ManejadorDeExcepcionesTests(SimpleTestCase):
 
         self.assertEqual(respuesta.data, {"message": "No existe.", "extra": {}})
 
+    def test_detalle_como_diccionario_o_lista_va_en_extra(self):
+        casos = [
+            (exceptions.PermissionDenied({"motivo": "x"}), 403, {"motivo": "x"}),
+            (exceptions.APIException(["a", "b"]), 500, ["a", "b"]),
+        ]
+        for exc, codigo, detalle in casos:
+            with self.subTest(excepcion=type(exc).__name__):
+                respuesta = self.manejar(exc)
+
+                self.assertEqual(respuesta.status_code, codigo)
+                self.assertEqual(respuesta.data["message"], str(exc.default_detail))
+                self.assertEqual(respuesta.data["extra"], {"detail": detalle})
+
     def test_errores_inesperados_no_se_silencian(self):
         self.assertIsNone(self.manejar(RuntimeError("falla")))

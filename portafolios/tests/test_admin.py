@@ -45,8 +45,9 @@ class AdminSoloLecturaTests(TestCase):
     def test_no_permite_modificar(self):
         url = reverse("admin:portafolios_posicion_change", args=[self.posicion.pk])
 
-        self.client.post(url, {"weight_inicial": "0.5", "cantidad": "99"})
+        respuesta = self.client.post(url, {"weight_inicial": "0.5", "cantidad": "99"})
 
+        self.assertEqual(respuesta.status_code, 403)
         self.posicion.refresh_from_db()
         self.assertEqual(self.posicion.weight_inicial, 1)
         self.assertIsNone(self.posicion.cantidad)
