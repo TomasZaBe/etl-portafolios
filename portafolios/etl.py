@@ -90,8 +90,8 @@ def extraer(ruta: Path | str) -> tuple[pd.DataFrame, pd.DataFrame]:
                 raise ErrorValidacionETL(
                     [f"Falta la hoja '{hoja}' en el archivo." for hoja in faltantes]
                 )
-            df_weights = libro.parse(hojas[HOJA_WEIGHTS.lower()])
-            df_precios = libro.parse(hojas[HOJA_PRECIOS.lower()])
+            df_weights = pd.read_excel(libro, sheet_name=hojas[HOJA_WEIGHTS.lower()])
+            df_precios = pd.read_excel(libro, sheet_name=hojas[HOJA_PRECIOS.lower()])
     except ErrorValidacionETL:
         raise
     except (OSError, ValueError) as error:
