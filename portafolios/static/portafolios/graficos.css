@@ -23,6 +23,35 @@ body {
   line-height: 1.4;
 }
 
+.navegacion {
+  background: var(--superficie);
+  border-bottom: 1px solid var(--borde);
+}
+
+.navegacion-contenido {
+  display: flex;
+  gap: 4px;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 8px 16px;
+}
+
+.navegacion a {
+  padding: 6px 12px;
+  border-radius: 6px;
+  color: var(--acento);
+  text-decoration: none;
+}
+
+.navegacion a:hover {
+  background: var(--fondo);
+}
+
+.navegacion a[aria-current="page"] {
+  background: var(--acento);
+  color: #fff;
+}
+
 .encabezado,
 main {
   max-width: 1280px;

@@ -7,6 +7,14 @@
   <link rel="stylesheet" href="{% static 'portafolios/graficos.css' %}">
 </head>
 <body>
+  <nav class="navegacion" aria-label="Secciones">
+    <div class="navegacion-contenido">
+      <a href="{% url 'portafolios:graficos' %}" aria-current="page">Gráficos</a>
+      <a href="{% url 'portafolios:api-list' %}">API</a>
+      <a href="{% url 'admin:index' %}">Admin</a>
+    </div>
+  </nav>
+
   <header class="encabezado">
     <h1>Evolución de portafolios</h1>
     <p>Valor total V<sub>t</sub> y weights w<sub>i,t</sub> con cantidades constantes desde t = 0.</p>

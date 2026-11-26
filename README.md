@@ -30,7 +30,7 @@ vista con gráficos.
 | 5. Vista que usa la API: áreas apiladas para w<sub>i,t</sub> y líneas para V<sub>t</sub> | Página principal con Chart.js y filtro de fechas. | `portafolios/templates/`, `portafolios/static/` |
 | Bonus: Django-Styleguide | Lógica de escritura en servicios, consultas en selectores, APIs con serializers de filtros y de salida, errores con `ApplicationError` y un manejador central, y configuración con variables de entorno. | `services.py`, `selectors.py`, `apis.py`, `core/`, `config/env.py` |
 
-El proyecto incluye 127 pruebas automatizadas y un workflow de integración
+El proyecto incluye 130 pruebas automatizadas y un workflow de integración
 continua que las ejecuta en cada pull request.
 
 ## Inicio rápido
@@ -104,6 +104,10 @@ python manage.py runserver
 - http://127.0.0.1:8000/api/portafolios/: API REST. Al abrirla en el navegador,
   Django REST Framework muestra una interfaz navegable.
 
+Ambas páginas tienen una barra con enlaces a los gráficos, la API y el admin.
+En la API navegable, el enlace `evolucion` de cada portafolio lleva a su
+evolución.
+
 Para detener el servidor, pulsar Ctrl + C en la terminal.
 
 ## Resultados
@@ -156,10 +160,24 @@ Todos los endpoints responden JSON y solo aceptan `GET`.
 
 ```json
 [
-  {"id": 1, "nombre": "portafolio 1", "fecha_inicio": "2022-02-15", "valor_inicial": "1000000000.00"},
-  {"id": 2, "nombre": "portafolio 2", "fecha_inicio": "2022-02-15", "valor_inicial": "1000000000.00"}
+  {
+    "id": 1,
+    "nombre": "portafolio 1",
+    "fecha_inicio": "2022-02-15",
+    "valor_inicial": "1000000000.00",
+    "evolucion": "http://127.0.0.1:8000/api/portafolios/1/evolucion/"
+  },
+  {
+    "id": 2,
+    "nombre": "portafolio 2",
+    "fecha_inicio": "2022-02-15",
+    "valor_inicial": "1000000000.00",
+    "evolucion": "http://127.0.0.1:8000/api/portafolios/2/evolucion/"
+  }
 ]
 ```
+
+`evolucion` es la URL del endpoint de evolución de cada portafolio.
 
 ### Evolución de un portafolio
 
@@ -278,6 +296,7 @@ etl-portafolios/
 │   ├── exception_handlers.py   Formato de los errores de la API
 │   └── utils.py                get_object
 ├── data/datos.xlsx             Archivo de entrada del enunciado
+├── templates/rest_framework/   Navegación de la API navegable
 ├── .env.example                Plantilla de variables de entorno
 └── portafolios/
     ├── models.py               Activo, Portafolio, Precio y Posicion
@@ -518,6 +537,12 @@ proyecto de este tamaño:
   la paleta de máximo contraste de Kelly, para que los 17 activos se distingan.
 - **Los errores de la API se muestran en la página**, por ejemplo un rango de
   fechas inválido o cantidades sin calcular.
+- **Una barra de navegación une las secciones.** La vista de gráficos, la API
+  navegable y el admin se enlazan entre sí. Para la API se reemplaza la
+  plantilla `rest_framework/api.html` de Django REST Framework desde la
+  carpeta `templates/` del proyecto, que es la forma que documenta Django
+  para personalizar plantillas de terceros. El admin ya enlaza a la vista de
+  gráficos con su botón "Ver el sitio".
 
 ## Desarrollo
 
@@ -537,7 +562,7 @@ Para aplicar el formato automáticamente: `python -m ruff format .`
 
 ### Pruebas
 
-Las 127 pruebas están organizadas por módulo en `core/tests/` y
+Las 130 pruebas están organizadas por módulo en `core/tests/` y
 `portafolios/tests/`:
 
 | Archivo | Cubre |
@@ -548,9 +573,9 @@ Las 127 pruebas están organizadas por módulo en `core/tests/` y
 | `test_etl.py` | Carga del archivo real, idempotencia, recarga y cada validación del ETL. |
 | `test_services.py` | Cálculo de las cantidades iniciales, validación del valor inicial y errores del comando. |
 | `test_selectors.py` | Cálculo de x<sub>i,t</sub>, V<sub>t</sub> y w<sub>i,t</sub>, filtros de fecha y número de consultas. |
-| `test_apis.py` | Respuestas de la API y sus errores 400, 404, 405 y 409. |
+| `test_apis.py` | Respuestas de la API, sus errores 400, 404, 405 y 409, y la navegación de la API navegable. |
 | `test_admin.py` | Admin de solo lectura. |
-| `test_views.py` | Vista de gráficos y archivos estáticos. |
+| `test_views.py` | Vista de gráficos, navegación entre secciones y archivos estáticos. |
 
 El JavaScript de los gráficos se verificó manualmente en el navegador, con el
 rango completo, un rango filtrado, un rango inválido, un rango sin datos y el

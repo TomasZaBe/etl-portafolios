@@ -1,0 +1,16 @@
+{% extends "rest_framework/base.html" %}
+{% comment %}
+Reemplaza la plantilla de la API navegable de Django REST Framework para
+agregar enlaces a las demás secciones del proyecto.
+{% endcomment %}
+
+{% block branding %}
+  <a class="navbar-brand" href="{% url 'portafolios:api-list' %}">API de portafolios</a>
+{% endblock %}
+
+{% block userlinks %}
+  <li><a href="{% url 'portafolios:graficos' %}">Gráficos</a></li>
+  <li><a href="{% url 'portafolios:api-list' %}">API</a></li>
+  <li><a href="{% url 'admin:index' %}">Admin</a></li>
+  {{ block.super }}
+{% endblock %}
