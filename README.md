@@ -12,7 +12,7 @@ En desarrollo.
 - [x] Modelos de activos, portafolios, precios y posiciones.
 - [x] ETL para cargar `datos.xlsx` en la base de datos.
 - [x] Cálculo de las cantidades iniciales.
-- [ ] API REST con los weights y el valor total entre dos fechas.
+- [x] API REST con los weights y el valor total entre dos fechas.
 - [ ] Vista con los gráficos de evolución.
 
 ## Objetivo
@@ -153,6 +153,47 @@ Django-Styleguide de ubicar la lógica de negocio en servicios.
   y recibe V<sub>0</sub> como parámetro en lugar de fijarlo en el código.
 - **Si falta algún dato** (fecha de inicio, posiciones o precio inicial de un
   activo), no se guarda ninguna cantidad de ningún portafolio.
+
+### API
+
+La API usa Django REST Framework y sigue la estructura del Django-Styleguide:
+
+- `portafolios/selectors.py` contiene las consultas.
+- `portafolios/apis.py` contiene endpoints delgados. Cada uno valida la entrada
+  con un serializer de filtros y da forma a la respuesta con un serializer de
+  salida.
+
+**Los cálculos se hacen en la base de datos con una única consulta del ORM:**
+
+```python
+Precio.objects.filter(activo__posiciones__portafolio=portafolio, fecha__gte=..., fecha__lte=...)
+    .annotate(monto=Cast("valor", FloatField()) * Cast("activo__posiciones__cantidad", FloatField()))
+    .annotate(valor_total=Window(Sum("monto"), partition_by=F("fecha")))
+    .annotate(weight=F("monto") / F("valor_total"))
+```
+
+- El filtro une cada precio con la posición del activo en el portafolio, de
+  donde se obtiene c<sub>i,0</sub>.
+- x<sub>i,t</sub> = p<sub>i,t</sub> · c<sub>i,0</sub> se calcula fila a fila.
+- V<sub>t</sub> se obtiene con una función de ventana
+  (`SUM(...) OVER (PARTITION BY fecha)`), que suma los montos de cada fecha sin
+  colapsar las filas. Así, w<sub>i,t</sub> = x<sub>i,t</sub> / V<sub>t</sub>
+  se calcula en la misma consulta.
+
+El selector hace en total dos consultas: una para verificar que las cantidades
+estén calculadas y otra para los cálculos. Hay una prueba que lo verifica.
+
+Otras decisiones:
+
+- **La API entrega números de punto flotante.** Los montos y V<sub>t</sub> se
+  redondean a 2 decimales y los weights a 10. Los datos de entrada se siguen
+  guardando como `Decimal`; la conversión ocurre solo al calcular.
+- **Las fechas son opcionales.** Sin `fecha_inicio` ni `fecha_fin` se devuelve
+  todo el rango disponible, lo que simplifica la vista de gráficos.
+- **Solo se consideran fechas desde la fecha de inicio del portafolio**, porque
+  antes de t = 0 las cantidades no están definidas.
+- **Si el portafolio no tiene las cantidades calculadas**, la API responde
+  `409 Conflict` en lugar de devolver valores vacíos o incorrectos.
 
 ## Criterios de finalización
 
@@ -295,8 +336,68 @@ Abrir http://127.0.0.1:8000/ en el navegador.
 
 Para detener el servidor, pulsar Ctrl + C en la terminal.
 
-Actualmente se muestra la página de bienvenida de Django.
-La API y la vista de portafolios todavía no están implementadas.
+La vista de gráficos todavía no está implementada. La API está disponible en
+http://127.0.0.1:8000/api/portafolios/; al abrirla en el navegador, Django REST
+Framework muestra una interfaz navegable.
+
+## API
+
+Todos los endpoints responden JSON y solo aceptan `GET`.
+
+### Listar portafolios
+
+`GET /api/portafolios/`
+
+```json
+[
+  {"id": 1, "nombre": "portafolio 1", "fecha_inicio": "2022-02-15", "valor_inicial": "1000000000.00"},
+  {"id": 2, "nombre": "portafolio 2", "fecha_inicio": "2022-02-15", "valor_inicial": "1000000000.00"}
+]
+```
+
+### Evolución de un portafolio
+
+`GET /api/portafolios/{id}/evolucion/?fecha_inicio=AAAA-MM-DD&fecha_fin=AAAA-MM-DD`
+
+Devuelve, para cada fecha del rango (ambos extremos incluidos), el valor total
+V<sub>t</sub> y, por activo, el monto x<sub>i,t</sub> y el weight
+w<sub>i,t</sub>.
+
+| Parámetro | Obligatorio | Descripción |
+|---|---|---|
+| `fecha_inicio` | No | Primera fecha del rango. Por defecto, la fecha de inicio del portafolio. |
+| `fecha_fin` | No | Última fecha del rango. Por defecto, la última fecha con precios. |
+
+Ejemplo: `GET /api/portafolios/1/evolucion/?fecha_inicio=2023-02-16&fecha_fin=2023-02-16`
+
+```json
+{
+  "portafolio": {"id": 1, "nombre": "portafolio 1"},
+  "fecha_inicio": "2023-02-16",
+  "fecha_fin": "2023-02-16",
+  "valores": [
+    {
+      "fecha": "2023-02-16",
+      "valor_total": 929055490.74,
+      "activos": [
+        {"activo": "ABS", "monto": 14669009.88, "weight": 0.0157891644},
+        {"activo": "Asia Desarrollada", "monto": 14805550.75, "weight": 0.0159361318},
+        {"activo": "EEUU", "monto": 264168711.91, "weight": 0.2843411557}
+      ]
+    }
+  ]
+}
+```
+
+El ejemplo muestra solo 3 de los 17 activos.
+
+Respuestas de error:
+
+| Código | Caso |
+|---|---|
+| `400` | Una fecha no tiene el formato `AAAA-MM-DD`, o `fecha_fin` es anterior a `fecha_inicio`. |
+| `404` | No existe el portafolio. |
+| `409` | El portafolio no tiene sus cantidades iniciales calculadas. |
 
 ## Verificaciones de desarrollo
 
@@ -334,7 +435,7 @@ python manage.py test
 
 Actualmente las pruebas cubren las restricciones de los modelos, el ETL y
 el cálculo de las cantidades iniciales, incluidas cargas completas del
-archivo real. Se ampliarán junto con la API.
+archivo real, los cálculos de la API y sus respuestas de error.
 
 ## Integración continua
 
