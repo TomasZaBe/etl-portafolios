@@ -13,7 +13,7 @@ En desarrollo.
 - [x] ETL para cargar `datos.xlsx` en la base de datos.
 - [x] Cálculo de las cantidades iniciales.
 - [x] API REST con los weights y el valor total entre dos fechas.
-- [ ] Vista con los gráficos de evolución.
+- [x] Vista con los gráficos de evolución.
 
 ## Objetivo
 
@@ -195,6 +195,26 @@ Otras decisiones:
 - **Si el portafolio no tiene las cantidades calculadas**, la API responde
   `409 Conflict` en lugar de devolver valores vacíos o incorrectos.
 
+### Vista de gráficos
+
+- **La vista consume la API desde el navegador**, como pide el enunciado. La
+  vista de Django solo entrega el HTML (`portafolios/views.py`) y no consulta la
+  base de datos; el JavaScript (`portafolios/static/portafolios/graficos.js`)
+  pide los portafolios y la evolución de cada uno a la API.
+- **Las URLs de la API se generan con `{% url %}`** y se pasan al JavaScript
+  como atributos `data-*`, para no repetir rutas fijas en el código del
+  navegador.
+- **Gráficos con Chart.js 4.4.1** cargado desde un CDN, sin paso de
+  compilación:
+  - Un gráfico de líneas compara el V<sub>t</sub> de ambos portafolios en el
+    mismo eje, con un resumen de la variación en el rango.
+  - Un gráfico de áreas apiladas por portafolio muestra los w<sub>i,t</sub>,
+    que suman 100 % en cada fecha.
+- **Cada activo tiene un color fijo** en ambos gráficos de weights, tomado de
+  la paleta de máximo contraste de Kelly, para que los 17 activos se distingan.
+- **Los errores de la API se muestran en la página**, por ejemplo un rango de
+  fechas inválido o cantidades sin calcular.
+
 ## Criterios de finalización
 
 - La importación y los cálculos cuentan con pruebas automatizadas.
@@ -336,9 +356,18 @@ Abrir http://127.0.0.1:8000/ en el navegador.
 
 Para detener el servidor, pulsar Ctrl + C en la terminal.
 
-La vista de gráficos todavía no está implementada. La API está disponible en
-http://127.0.0.1:8000/api/portafolios/; al abrirla en el navegador, Django REST
-Framework muestra una interfaz navegable.
+La página principal muestra los gráficos de evolución:
+
+- Un gráfico de líneas con el valor total V<sub>t</sub> de ambos portafolios.
+- Un gráfico de áreas apiladas con los weights w<sub>i,t</sub> de cada
+  portafolio.
+
+Los campos de fecha filtran el rango y el botón "Rango completo" vuelve a
+mostrar todo el período. La vista requiere haber ejecutado antes
+`cargar_datos` y `calcular_cantidades`.
+
+La API está disponible en http://127.0.0.1:8000/api/portafolios/; al abrirla
+en el navegador, Django REST Framework muestra una interfaz navegable.
 
 ## API
 
@@ -435,7 +464,9 @@ python manage.py test
 
 Actualmente las pruebas cubren las restricciones de los modelos, el ETL y
 el cálculo de las cantidades iniciales, incluidas cargas completas del
-archivo real, los cálculos de la API y sus respuestas de error.
+archivo real, los cálculos de la API y sus respuestas de error, y la vista de
+gráficos. El JavaScript de los gráficos se verificó manualmente en el
+navegador.
 
 ## Integración continua
 
